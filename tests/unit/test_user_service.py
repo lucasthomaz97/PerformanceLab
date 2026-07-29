@@ -21,6 +21,8 @@ class TestCreateUser:
             phone="+55 11 99999-9999",
         )
         user = UserService.create(db_session, data)
+        assert user.name == "Bob"
+        assert user.email == "bob@test.com"
         assert user.phone == "+55 11 99999-9999"
 
     def test_create_user_duplicate_email(self, db_session, user):
@@ -59,12 +61,13 @@ class TestListUsers:
         )
         result = UserService.get_multi(db_session)
         assert len(result) == 2
+        assert {u.name for u in result} == {"A", "B"}
 
     def test_list_users_paginated(self, db_session):
         UserService.create(
             db_session, UserCreate(name="A", email="a@test.com")
         )
-        UserService.create(
+        u2 = UserService.create(
             db_session, UserCreate(name="B", email="b@test.com")
         )
         UserService.create(
@@ -72,6 +75,7 @@ class TestListUsers:
         )
         result = UserService.get_multi(db_session, skip=1, limit=1)
         assert len(result) == 1
+        assert result[0].id == u2.id
         assert result[0].name == "B"
 
 
@@ -86,12 +90,14 @@ class TestUpdateUser:
         data = UserUpdate(email="alice_new@test.com")
         result = UserService.update(db_session, user.id, data)
         assert result.email == "alice_new@test.com"
+        assert result.name == user.name
 
     def test_update_user_not_found(self, db_session):
         data = UserUpdate(name="Ghost")
         with pytest.raises(HTTPException) as exc:
             UserService.update(db_session, 999, data)
         assert exc.value.status_code == 404
+        assert exc.value.detail == "user not found"
 
     def test_update_user_duplicate_email(self, db_session, user, second_user):
         data = UserUpdate(email=second_user.email)
@@ -107,11 +113,13 @@ class TestDeleteUser:
         with pytest.raises(HTTPException) as exc:
             UserService.get(db_session, user.id)
         assert exc.value.status_code == 404
+        assert exc.value.detail == "user not found"
 
     def test_delete_user_not_found(self, db_session):
         with pytest.raises(HTTPException) as exc:
             UserService.delete(db_session, 999)
         assert exc.value.status_code == 404
+        assert exc.value.detail == "user not found"
 
     def test_delete_user_with_active_reservations(
         self, db_session, reservation

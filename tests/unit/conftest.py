@@ -3,6 +3,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 import pytest
+from freezegun import freeze_time
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
@@ -62,17 +63,22 @@ def second_room(db_session: Session) -> Room:
     return RoomService.create(db_session, data)
 
 
+FROZEN_DATE = "2026-07-01"
+
+
 @pytest.fixture
+@freeze_time(FROZEN_DATE)
 def reservation_data(user: User, room: Room) -> ReservationCreate:
     return ReservationCreate(
         user_id=user.id,
         room_id=room.id,
-        check_in=date.today() + timedelta(days=1),
-        check_out=date.today() + timedelta(days=4),
+        check_in=date(2026, 7, 2),
+        check_out=date(2026, 7, 5),
     )
 
 
 @pytest.fixture
+@freeze_time(FROZEN_DATE)
 def reservation(
     db_session: Session, reservation_data: ReservationCreate
 ) -> Reservation:

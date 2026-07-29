@@ -12,8 +12,7 @@ from api.services.user_service import UserService
 from api.schemas.room import RoomCreate
 from api.schemas.user import UserCreate
 
-
-FROZEN_DATE = "2026-07-01"
+from tests.unit.conftest import FROZEN_DATE
 
 
 class TestCreateReservation:
@@ -288,7 +287,7 @@ class TestListUserReservations:
     def test_list_user_reservations(
         self, db_session, user, room, second_room
     ):
-        ReservationService.create(
+        r1 = ReservationService.create(
             db_session,
             ReservationCreate(
                 user_id=user.id,
@@ -297,7 +296,7 @@ class TestListUserReservations:
                 check_out=date(2026, 8, 5),
             ),
         )
-        ReservationService.create(
+        r2 = ReservationService.create(
             db_session,
             ReservationCreate(
                 user_id=user.id,
@@ -310,6 +309,8 @@ class TestListUserReservations:
             db_session, user.id
         )
         assert len(result) == 2
+        assert {r.id for r in result} == {r1.id, r2.id}
+        assert all(r.user_id == user.id for r in result)
 
     @freeze_time(FROZEN_DATE)
     def test_list_user_reservations_empty(
@@ -335,7 +336,7 @@ class TestListRoomReservations:
     def test_list_room_reservations(
         self, db_session, user, room, second_user
     ):
-        ReservationService.create(
+        r1 = ReservationService.create(
             db_session,
             ReservationCreate(
                 user_id=user.id,
@@ -344,7 +345,7 @@ class TestListRoomReservations:
                 check_out=date(2026, 8, 5),
             ),
         )
-        ReservationService.create(
+        r2 = ReservationService.create(
             db_session,
             ReservationCreate(
                 user_id=second_user.id,
@@ -357,6 +358,8 @@ class TestListRoomReservations:
             db_session, room.id
         )
         assert len(result) == 2
+        assert {r.id for r in result} == {r1.id, r2.id}
+        assert all(r.room_id == room.id for r in result)
 
     @freeze_time(FROZEN_DATE)
     def test_list_room_reservations_empty(
