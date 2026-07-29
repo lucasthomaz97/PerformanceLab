@@ -110,6 +110,16 @@ Tables are created automatically on startup via `Base.metadata.create_all`.
 - A user can only be deleted if they have **no active reservations**.
 - A room can only be deactivated if it has **no active reservations**.
 
+### Tests
+
+Unit tests are in `tests/unit/`. Run them with:
+
+```
+uv run pytest tests/unit -v
+```
+
+See [tests/unit/README.md](tests/unit/README.md) for a full description of every test.
+
 ### Interactive docs
 
 - Swagger: [http://localhost:8000/docs](http://localhost:8000/docs)
@@ -220,6 +230,16 @@ As tabelas são criadas automaticamente na inicialização via `Base.metadata.cr
 - Uma reserva só pode ser cancelada se estiver com status **confirmed**.
 - Um usuário só pode ser excluído se **não tiver reservas ativas**.
 - Uma sala só pode ser desativada se **não tiver reservas ativas**.
+
+### Testes
+
+Os testes unitários estão em `tests/unit/`. Execute com:
+
+```
+uv run pytest tests/unit -v
+```
+
+Consulte [tests/unit/README.md](tests/unit/README.md) para a descrição completa de cada teste.
 
 ### Documentação interativa
 
