@@ -10,7 +10,7 @@
 
 ### Description
 
-REST API for room, user and reservation management. Built with **FastAPI**, **SQLAlchemy** and **PostgreSQL**.
+REST API for room, user and reservation management. Built with **FastAPI**, **SQLAlchemy** and **PostgreSQL**. This project serves as a base to study performance testing and load testing.
 
 ### Features
 
@@ -131,7 +131,7 @@ See [tests/unit/README.md](tests/unit/README.md) for a full description of every
 
 ### Descrição
 
-API REST para gerenciamento de salas, usuários e reservas. Desenvolvida com **FastAPI**, **SQLAlchemy** e **PostgreSQL**.
+API REST para gerenciamento de salas, usuários e reservas. Desenvolvida com **FastAPI**, **SQLAlchemy** e **PostgreSQL**. Este projeto serve como base para estudar testes de performance e testes de carga.
 
 ### Funcionalidades
 
