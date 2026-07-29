@@ -7,14 +7,18 @@ Uses **pytest** with an in-memory SQLite database for service tests, and pure Py
 ```
 tests/unit/
 ├── conftest.py          # Shared fixtures (engine, db_session, user, room, etc.)
-├── services/            # Service-layer tests (require DB)
-│   ├── test_user_service.py
-│   ├── test_room_service.py
-│   └── test_reservation_service.py
+├── config/              # Config module tests (mocked env, no DB)
+│   └── test_config.py
+├── models/              # ORM model tests (require DB)
+│   └── test_models.py
 ├── schemas/             # Schema validation tests (no DB, pure Pydantic)
 │   ├── test_user_schemas.py
 │   ├── test_room_schemas.py
 │   └── test_reservation_schemas.py
+├── services/            # Service-layer tests (require DB)
+│   ├── test_user_service.py
+│   ├── test_room_service.py
+│   └── test_reservation_service.py
 └── README.md
 ```
 
@@ -30,6 +34,12 @@ uv run pytest tests/unit/services -v
 # Run schema tests only
 uv run pytest tests/unit/schemas -v
 
+# Run config tests only
+uv run pytest tests/unit/config -v
+
+# Run model tests only
+uv run pytest tests/unit/models -v
+
 # Run a specific file
 uv run pytest tests/unit/services/test_user_service.py -v
 
@@ -39,7 +49,7 @@ uv run pytest tests/unit -k "overlap" -v
 
 ## Fixtures (`conftest.py`)
 
-Shared fixtures auto-discovered by pytest (available in both `services/` and `schemas/` subdirectories):
+Shared fixtures auto-discovered by pytest (available in all subdirectories):
 
 | Fixture           | Description                                   |
 | ----------------- | --------------------------------------------- |
@@ -188,3 +198,35 @@ Pure validation tests — no database required. Each class validates Pydantic fi
 |                              | `test_check_in_past_raises`   | check_in before today raises ValidationError     |
 |                              | `test_check_out_equal_check_in_raises` | check_out == check_in raises         |
 |                              | `test_check_out_before_check_in_raises` | check_out before check_in raises     |
+
+## Config Tests (`config/`)
+
+Configuration module tests — uses `unittest.mock.patch` to control environment variables without a `.env` file. No database required.
+
+### `config/test_config.py`
+
+| Class           | Test                   | What it verifies                                 |
+| --------------- | ---------------------- | ------------------------------------------------ |
+| **TestConfig**  | `test_defaults`        | All constants fall back to expected defaults      |
+|                 | `test_custom_values`   | Env vars override all defaults (DB_PORT as int)  |
+|                 | `test_partial_override` | Single env var leaves others at default          |
+|                 | `test_port_is_int`     | DB_PORT is coerced to int                        |
+|                 | `test_dotenv_loaded`   | load_dotenv called with correct path & override  |
+
+## Model Tests (`models/`)
+
+ORM model tests — validates defaults, constraints, cascades, and enum values. Requires an in-memory SQLite database (shared `db_session` fixture).
+
+### `models/test_models.py`
+
+| Class                      | Test                                        | What it verifies                                    |
+| -------------------------- | ------------------------------------------- | --------------------------------------------------- |
+| **TestReservationStatus**  | `test_enum_values`                          | Enum members have correct values                    |
+|                            | `test_is_str_enum`                          | ReservationStatus is a str subclass                 |
+|                            | `test_all_members_covered`                  | All 3 expected members present                      |
+| **TestRoomDefaults**       | `test_is_active_defaults_to_true`           | Room.is_active default at ORM level                 |
+| **TestReservationDefaults** | `test_status_defaults_to_confirmed`        | Reservation.status default = CONFIRMED              |
+| **TestUserUniqueEmail**    | `test_duplicate_email_raises`               | DB-level IntegrityError on duplicate email           |
+| **TestRoomUniqueName**     | `test_duplicate_name_raises`                | DB-level IntegrityError on duplicate room name      |
+| **TestUserCascadeDelete**  | `test_delete_user_cascades_to_reservations` | Deleting user cascades to reservations              |
+| **TestRoomCascadeDelete**  | `test_delete_room_cascades_to_reservations` | Deleting room cascades to reservations              |
