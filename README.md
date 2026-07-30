@@ -112,13 +112,13 @@ Tables are created automatically on startup via `Base.metadata.create_all`.
 
 ### Tests
 
-Unit tests are in `tests/unit/`. Run them with:
+Tests are in `tests/` (unit tests in `tests/unit/`, integration tests in `tests/integration/`). Run all with:
 
 ```
-uv run pytest tests/unit -v
+uv run pytest tests/ -v
 ```
 
-See [tests/unit/README.md](tests/unit/README.md) for a full description of every test.
+See [tests/README.md](tests/README.md) for a full description of every test.
 
 ### Interactive docs
 
@@ -233,13 +233,13 @@ As tabelas são criadas automaticamente na inicialização via `Base.metadata.cr
 
 ### Testes
 
-Os testes unitários estão em `tests/unit/`. Execute com:
+Os testes estão em `tests/` (testes unitários em `tests/unit/`, testes de integração em `tests/integration/`). Execute todos com:
 
 ```
-uv run pytest tests/unit -v
+uv run pytest tests/ -v
 ```
 
-Consulte [tests/unit/README.md](tests/unit/README.md) para a descrição completa de cada teste.
+Consulte [tests/README.md](tests/README.md) para a descrição completa de cada teste.
 
 ### Documentação interativa
 

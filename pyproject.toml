@@ -17,4 +17,5 @@ dependencies = [
 dev = [
     "pytest>=8.0.0",
     "freezegun>=1.5.0",
+    "httpx2>=2.9.1",
 ]

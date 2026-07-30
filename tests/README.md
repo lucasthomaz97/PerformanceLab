@@ -1,32 +1,45 @@
-# Unit Tests
+# Unit & Integration Tests
 
-Uses **pytest** with an in-memory SQLite database for service tests, and pure Pydantic for schema tests (no external database needed).
+Unit tests use **pytest** with an in-memory SQLite database for service tests, and pure Pydantic for schema tests (no external database needed).
+
+Integration tests use **FastAPI TestClient** (`httpx2`) with the same in-memory SQLite to validate the HTTP layer (status codes, response shapes, error propagation).
 
 ## Structure
 
 ```
-tests/unit/
-├── conftest.py          # Shared fixtures (engine, db_session, user, room, etc.)
-├── config/              # Config module tests (mocked env, no DB)
-│   └── test_config.py
-├── models/              # ORM model tests (require DB)
-│   └── test_models.py
-├── schemas/             # Schema validation tests (no DB, pure Pydantic)
-│   ├── test_user_schemas.py
-│   ├── test_room_schemas.py
-│   └── test_reservation_schemas.py
-├── services/            # Service-layer tests (require DB)
-│   ├── test_user_service.py
-│   ├── test_room_service.py
-│   └── test_reservation_service.py
-└── README.md
+tests/
+├── integration/         # Router integration tests (HTTP layer via TestClient)
+│   ├── conftest.py      # TestClient fixture + get_db override
+│   ├── test_users_api.py
+│   ├── test_rooms_api.py
+│   └── test_reservations_api.py
+└── unit/                # Unit tests (service/schema/model/config)
+    ├── conftest.py      # Shared fixtures (engine, db_session, user, room, etc.)
+    ├── config/          # Config module tests (mocked env, no DB)
+    │   └── test_config.py
+    ├── models/          # ORM model tests (require DB)
+    │   └── test_models.py
+    ├── schemas/         # Schema validation tests (no DB, pure Pydantic)
+    │   ├── test_user_schemas.py
+    │   ├── test_room_schemas.py
+    │   └── test_reservation_schemas.py
+    ├── services/        # Service-layer tests (require DB)
+    │   ├── test_user_service.py
+    │   ├── test_room_service.py
+    │   └── test_reservation_service.py
 ```
 
 ## How to run
 
 ```bash
-# Run all unit tests
+# Run all tests (unit + integration)
+uv run pytest tests/ -v
+
+# Run unit tests only
 uv run pytest tests/unit -v
+
+# Run integration tests only
+uv run pytest tests/integration -v
 
 # Run service tests only
 uv run pytest tests/unit/services -v
@@ -59,8 +72,9 @@ Shared fixtures auto-discovered by pytest (available in all subdirectories):
 | `second_user`     | Pre-created second user (Bob)                 |
 | `room`            | Pre-created room (101, 2 guests)              |
 | `second_room`     | Pre-created second room (102, 4 guests)       |
-| `reservation_data` | DTO for creating a reservation (user + room) |
 | `reservation`     | Pre-created reservation (user + room)         |
+
+> **Note**: The same fixtures are also available in `tests/integration/conftest.py` for integration tests.
 
 ## Service Tests (`services/`)
 
