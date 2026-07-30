@@ -66,9 +66,7 @@ class ReservationService:
     @staticmethod
     def cancel(db: Session, reservation_id: int) -> Reservation:
         reservation = (
-            db.query(Reservation)
-            .filter(Reservation.id == reservation_id)
-            .first()
+            db.query(Reservation).filter(Reservation.id == reservation_id).first()
         )
         if not reservation:
             raise HTTPException(
@@ -78,7 +76,10 @@ class ReservationService:
         if reservation.status != ReservationStatus.CONFIRMED:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"cannot cancel reservation with status '{reservation.status.value}'",
+                detail=(
+                    f"cannot cancel reservation with status "
+                    f"'{reservation.status.value}'"
+                ),
             )
         reservation.status = ReservationStatus.CANCELLED
         db.commit()
@@ -86,9 +87,7 @@ class ReservationService:
         return reservation
 
     @staticmethod
-    def get_user_reservations(
-        db: Session, user_id: int
-    ) -> list[Reservation]:
+    def get_user_reservations(db: Session, user_id: int) -> list[Reservation]:
         user = db.query(User).filter(User.id == user_id).first()
         if not user:
             raise HTTPException(
@@ -103,9 +102,7 @@ class ReservationService:
         )
 
     @staticmethod
-    def get_room_reservations(
-        db: Session, room_id: int
-    ) -> list[Reservation]:
+    def get_room_reservations(db: Session, room_id: int) -> list[Reservation]:
         room = (
             db.query(Room).filter(Room.id == room_id, Room.is_active.is_(True)).first()
         )

@@ -10,10 +10,6 @@ from api.models.reservation import ReservationStatus
 from api.schemas.reservation import ReservationCreate
 from api.services.reservation_service import ReservationService
 from api.services.room_service import RoomService
-from api.services.user_service import UserService
-from api.schemas.room import RoomCreate
-from api.schemas.user import UserCreate
-
 from tests.unit.conftest import FROZEN_DATE
 
 
@@ -61,9 +57,7 @@ class TestCreateReservation:
         assert exc.value.detail == "room not found or unavailable"
 
     @freeze_time(FROZEN_DATE)
-    def test_create_reservation_room_inactive(
-        self, db_session, user, room
-    ):
+    def test_create_reservation_room_inactive(self, db_session, user, room):
         RoomService.delete(db_session, room.id)
         data = ReservationCreate(
             user_id=user.id,
@@ -98,14 +92,10 @@ class TestCreateReservation:
                 ),
             )
         assert exc.value.status_code == 409
-        assert (
-            "already reserved" in exc.value.detail
-        )
+        assert "already reserved" in exc.value.detail
 
     @freeze_time(FROZEN_DATE)
-    def test_create_overlap_start_before(
-        self, db_session, user, room
-    ):
+    def test_create_overlap_start_before(self, db_session, user, room):
         ReservationService.create(
             db_session,
             ReservationCreate(
@@ -126,14 +116,10 @@ class TestCreateReservation:
                 ),
             )
         assert exc.value.status_code == 409
-        assert (
-            exc.value.detail == "room already reserved for the selected dates"
-        )
+        assert exc.value.detail == "room already reserved for the selected dates"
 
     @freeze_time(FROZEN_DATE)
-    def test_create_overlap_ends_after(
-        self, db_session, user, room
-    ):
+    def test_create_overlap_ends_after(self, db_session, user, room):
         ReservationService.create(
             db_session,
             ReservationCreate(
@@ -154,14 +140,10 @@ class TestCreateReservation:
                 ),
             )
         assert exc.value.status_code == 409
-        assert (
-            exc.value.detail == "room already reserved for the selected dates"
-        )
+        assert exc.value.detail == "room already reserved for the selected dates"
 
     @freeze_time(FROZEN_DATE)
-    def test_create_overlap_contains(
-        self, db_session, user, room
-    ):
+    def test_create_overlap_contains(self, db_session, user, room):
         ReservationService.create(
             db_session,
             ReservationCreate(
@@ -182,14 +164,10 @@ class TestCreateReservation:
                 ),
             )
         assert exc.value.status_code == 409
-        assert (
-            exc.value.detail == "room already reserved for the selected dates"
-        )
+        assert exc.value.detail == "room already reserved for the selected dates"
 
     @freeze_time(FROZEN_DATE)
-    def test_create_no_overlap_adjacent(
-        self, db_session, user, room
-    ):
+    def test_create_no_overlap_adjacent(self, db_session, user, room):
         ReservationService.create(
             db_session,
             ReservationCreate(
@@ -212,9 +190,7 @@ class TestCreateReservation:
         assert result.status == ReservationStatus.CONFIRMED
 
     @freeze_time(FROZEN_DATE)
-    def test_create_no_overlap_separate(
-        self, db_session, user, room
-    ):
+    def test_create_no_overlap_separate(self, db_session, user, room):
         ReservationService.create(
             db_session,
             ReservationCreate(
@@ -268,9 +244,7 @@ class TestCreateReservation:
         assert result.status == ReservationStatus.CONFIRMED
 
     @freeze_time(FROZEN_DATE)
-    def test_create_reservation_db_constraint_race(
-        self, db_session, user, room
-    ):
+    def test_create_reservation_db_constraint_race(self, db_session, user, room):
         data = ReservationCreate(
             user_id=user.id,
             room_id=room.id,
@@ -291,9 +265,7 @@ class TestCreateReservation:
 
 class TestCancelReservation:
     @freeze_time(FROZEN_DATE)
-    def test_cancel_confirmed_reservation(
-        self, db_session, reservation
-    ):
+    def test_cancel_confirmed_reservation(self, db_session, reservation):
         result = ReservationService.cancel(db_session, reservation.id)
         assert result.status == ReservationStatus.CANCELLED
 
@@ -324,9 +296,7 @@ class TestCancelReservation:
 
 class TestListUserReservations:
     @freeze_time(FROZEN_DATE)
-    def test_list_user_reservations(
-        self, db_session, user, room, second_room
-    ):
+    def test_list_user_reservations(self, db_session, user, room, second_room):
         r1 = ReservationService.create(
             db_session,
             ReservationCreate(
@@ -345,37 +315,27 @@ class TestListUserReservations:
                 check_out=date(2026, 9, 5),
             ),
         )
-        result = ReservationService.get_user_reservations(
-            db_session, user.id
-        )
+        result = ReservationService.get_user_reservations(db_session, user.id)
         assert len(result) == 2
         assert {r.id for r in result} == {r1.id, r2.id}
         assert all(r.user_id == user.id for r in result)
 
     @freeze_time(FROZEN_DATE)
-    def test_list_user_reservations_empty(
-        self, db_session, user
-    ):
-        result = ReservationService.get_user_reservations(
-            db_session, user.id
-        )
+    def test_list_user_reservations_empty(self, db_session, user):
+        result = ReservationService.get_user_reservations(db_session, user.id)
         assert result == []
 
     @freeze_time(FROZEN_DATE)
     def test_list_user_reservations_user_not_found(self, db_session):
         with pytest.raises(HTTPException) as exc:
-            ReservationService.get_user_reservations(
-                db_session, 999
-            )
+            ReservationService.get_user_reservations(db_session, 999)
         assert exc.value.status_code == 404
         assert exc.value.detail == "user not found"
 
 
 class TestListRoomReservations:
     @freeze_time(FROZEN_DATE)
-    def test_list_room_reservations(
-        self, db_session, user, room, second_user
-    ):
+    def test_list_room_reservations(self, db_session, user, room, second_user):
         r1 = ReservationService.create(
             db_session,
             ReservationCreate(
@@ -394,30 +354,20 @@ class TestListRoomReservations:
                 check_out=date(2026, 9, 5),
             ),
         )
-        result = ReservationService.get_room_reservations(
-            db_session, room.id
-        )
+        result = ReservationService.get_room_reservations(db_session, room.id)
         assert len(result) == 2
         assert {r.id for r in result} == {r1.id, r2.id}
         assert all(r.room_id == room.id for r in result)
 
     @freeze_time(FROZEN_DATE)
-    def test_list_room_reservations_empty(
-        self, db_session, room
-    ):
-        result = ReservationService.get_room_reservations(
-            db_session, room.id
-        )
+    def test_list_room_reservations_empty(self, db_session, room):
+        result = ReservationService.get_room_reservations(db_session, room.id)
         assert result == []
 
     @freeze_time(FROZEN_DATE)
-    def test_list_room_reservations_room_inactive(
-        self, db_session, room
-    ):
+    def test_list_room_reservations_room_inactive(self, db_session, room):
         RoomService.delete(db_session, room.id)
         with pytest.raises(HTTPException) as exc:
-            ReservationService.get_room_reservations(
-                db_session, room.id
-            )
+            ReservationService.get_room_reservations(db_session, room.id)
         assert exc.value.status_code == 404
         assert exc.value.detail == "room not found or unavailable"

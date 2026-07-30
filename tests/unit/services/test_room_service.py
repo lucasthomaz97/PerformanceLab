@@ -9,9 +9,7 @@ from api.services.room_service import RoomService
 
 class TestCreateRoom:
     def test_create_room_success(self, db_session):
-        data = RoomCreate(
-            name="101", capacity=2, price_per_night=Decimal("150.00")
-        )
+        data = RoomCreate(name="101", capacity=2, price_per_night=Decimal("150.00"))
         room = RoomService.create(db_session, data)
         assert room.id is not None
         assert room.name == "101"
@@ -31,9 +29,7 @@ class TestCreateRoom:
         assert room.description == "Suite with ocean view"
 
     def test_create_room_duplicate_name(self, db_session, room):
-        data = RoomCreate(
-            name=room.name, capacity=2, price_per_night=Decimal("200.00")
-        )
+        data = RoomCreate(name=room.name, capacity=2, price_per_night=Decimal("200.00"))
         with pytest.raises(HTTPException) as exc:
             RoomService.create(db_session, data)
         assert exc.value.status_code == 409
@@ -61,15 +57,11 @@ class TestListRooms:
     def test_list_rooms_basic(self, db_session):
         RoomService.create(
             db_session,
-            RoomCreate(
-                name="101", capacity=2, price_per_night=Decimal("100")
-            ),
+            RoomCreate(name="101", capacity=2, price_per_night=Decimal("100")),
         )
         RoomService.create(
             db_session,
-            RoomCreate(
-                name="102", capacity=2, price_per_night=Decimal("100")
-            ),
+            RoomCreate(name="102", capacity=2, price_per_night=Decimal("100")),
         )
         result = RoomService.get_multi(db_session)
         assert len(result) == 2
@@ -79,13 +71,9 @@ class TestListRooms:
         result = RoomService.get_multi(db_session)
         assert len(result) == 0
 
-    def test_list_rooms_includes_inactive_when_requested(
-        self, db_session, room
-    ):
+    def test_list_rooms_includes_inactive_when_requested(self, db_session, room):
         RoomService.delete(db_session, room.id)
-        result = RoomService.get_multi(
-            db_session, active_only=False
-        )
+        result = RoomService.get_multi(db_session, active_only=False)
         assert len(result) == 1
         assert result[0].is_active is False
 
@@ -128,14 +116,9 @@ class TestDeleteRoom:
         assert exc.value.status_code == 404
         assert exc.value.detail == "room not found"
 
-    def test_delete_room_with_active_reservations(
-        self, db_session, reservation
-    ):
+    def test_delete_room_with_active_reservations(self, db_session, reservation):
         room_id = reservation.room_id
         with pytest.raises(HTTPException) as exc:
             RoomService.delete(db_session, room_id)
         assert exc.value.status_code == 409
-        assert (
-            exc.value.detail
-            == "cannot delete room with active reservations"
-        )
+        assert exc.value.detail == "cannot delete room with active reservations"

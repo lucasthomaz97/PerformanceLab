@@ -1,5 +1,5 @@
 from collections.abc import Generator
-from datetime import date, timedelta
+from datetime import date
 from decimal import Decimal
 
 import pytest
@@ -25,7 +25,7 @@ def engine():
 
 
 @pytest.fixture
-def db_session(engine) -> Generator[Session, None, None]:
+def db_session(engine) -> Generator[Session]:
     Base.metadata.create_all(bind=engine)
     session = Session(bind=engine, expire_on_commit=False)
     try:
@@ -49,17 +49,13 @@ def second_user(db_session: Session) -> User:
 
 @pytest.fixture
 def room(db_session: Session) -> Room:
-    data = RoomCreate(
-        name="101", capacity=2, price_per_night=Decimal("150.00")
-    )
+    data = RoomCreate(name="101", capacity=2, price_per_night=Decimal("150.00"))
     return RoomService.create(db_session, data)
 
 
 @pytest.fixture
 def second_room(db_session: Session) -> Room:
-    data = RoomCreate(
-        name="102", capacity=4, price_per_night=Decimal("250.00")
-    )
+    data = RoomCreate(name="102", capacity=4, price_per_night=Decimal("250.00"))
     return RoomService.create(db_session, data)
 
 
@@ -68,9 +64,7 @@ FROZEN_DATE = "2026-07-01"
 
 @pytest.fixture
 @freeze_time(FROZEN_DATE)
-def reservation(
-    db_session: Session, user: User, room: Room
-) -> Reservation:
+def reservation(db_session: Session, user: User, room: Room) -> Reservation:
     data = ReservationCreate(
         user_id=user.id,
         room_id=room.id,

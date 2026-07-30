@@ -53,26 +53,16 @@ class TestListUsers:
         assert result == []
 
     def test_list_users_returns_all(self, db_session):
-        UserService.create(
-            db_session, UserCreate(name="A", email="a@test.com")
-        )
-        UserService.create(
-            db_session, UserCreate(name="B", email="b@test.com")
-        )
+        UserService.create(db_session, UserCreate(name="A", email="a@test.com"))
+        UserService.create(db_session, UserCreate(name="B", email="b@test.com"))
         result = UserService.get_multi(db_session)
         assert len(result) == 2
         assert {u.name for u in result} == {"A", "B"}
 
     def test_list_users_paginated(self, db_session):
-        UserService.create(
-            db_session, UserCreate(name="A", email="a@test.com")
-        )
-        u2 = UserService.create(
-            db_session, UserCreate(name="B", email="b@test.com")
-        )
-        UserService.create(
-            db_session, UserCreate(name="C", email="c@test.com")
-        )
+        UserService.create(db_session, UserCreate(name="A", email="a@test.com"))
+        u2 = UserService.create(db_session, UserCreate(name="B", email="b@test.com"))
+        UserService.create(db_session, UserCreate(name="C", email="c@test.com"))
         result = UserService.get_multi(db_session, skip=1, limit=1)
         assert len(result) == 1
         assert result[0].id == u2.id
@@ -121,14 +111,9 @@ class TestDeleteUser:
         assert exc.value.status_code == 404
         assert exc.value.detail == "user not found"
 
-    def test_delete_user_with_active_reservations(
-        self, db_session, reservation
-    ):
+    def test_delete_user_with_active_reservations(self, db_session, reservation):
         user_id = reservation.user_id
         with pytest.raises(HTTPException) as exc:
             UserService.delete(db_session, user_id)
         assert exc.value.status_code == 409
-        assert (
-            exc.value.detail
-            == "cannot delete user with active reservations"
-        )
+        assert exc.value.detail == "cannot delete user with active reservations"

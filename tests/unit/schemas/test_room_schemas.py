@@ -8,9 +8,7 @@ from api.schemas.room import RoomCreate, RoomUpdate
 
 class TestRoomCreate:
     def test_valid_minimal(self):
-        data = RoomCreate(
-            name="101", capacity=2, price_per_night=Decimal("150.00")
-        )
+        data = RoomCreate(name="101", capacity=2, price_per_night=Decimal("150.00"))
         assert data.name == "101"
         assert data.capacity == 2
         assert data.price_per_night == Decimal("150.00")
@@ -26,9 +24,7 @@ class TestRoomCreate:
         assert data.description == "Suite with ocean view"
 
     def test_trailing_whitespace_stripped(self):
-        data = RoomCreate(
-            name="  101  ", capacity=2, price_per_night=Decimal("100")
-        )
+        data = RoomCreate(name="  101  ", capacity=2, price_per_night=Decimal("100"))
         assert data.name == "101"
 
     def test_name_empty_raises(self):
@@ -37,33 +33,23 @@ class TestRoomCreate:
 
     def test_name_whitespace_only_raises(self):
         with pytest.raises(ValidationError):
-            RoomCreate(
-                name="   ", capacity=2, price_per_night=Decimal("100")
-            )
+            RoomCreate(name="   ", capacity=2, price_per_night=Decimal("100"))
 
     def test_name_too_long_raises(self):
         with pytest.raises(ValidationError):
-            RoomCreate(
-                name="R" * 51, capacity=2, price_per_night=Decimal("100")
-            )
+            RoomCreate(name="R" * 51, capacity=2, price_per_night=Decimal("100"))
 
     def test_name_max_length_allowed(self):
-        data = RoomCreate(
-            name="R" * 50, capacity=2, price_per_night=Decimal("100")
-        )
+        data = RoomCreate(name="R" * 50, capacity=2, price_per_night=Decimal("100"))
         assert len(data.name) == 50
 
     def test_capacity_zero_raises(self):
         with pytest.raises(ValidationError):
-            RoomCreate(
-                name="101", capacity=0, price_per_night=Decimal("100")
-            )
+            RoomCreate(name="101", capacity=0, price_per_night=Decimal("100"))
 
     def test_capacity_negative_raises(self):
         with pytest.raises(ValidationError):
-            RoomCreate(
-                name="101", capacity=-1, price_per_night=Decimal("100")
-            )
+            RoomCreate(name="101", capacity=-1, price_per_night=Decimal("100"))
 
     def test_price_zero_raises(self):
         with pytest.raises(ValidationError):
@@ -71,9 +57,7 @@ class TestRoomCreate:
 
     def test_price_negative_raises(self):
         with pytest.raises(ValidationError):
-            RoomCreate(
-                name="101", capacity=2, price_per_night=Decimal("-1")
-            )
+            RoomCreate(name="101", capacity=2, price_per_night=Decimal("-1"))
 
     def test_description_too_long_raises(self):
         with pytest.raises(ValidationError):

@@ -29,9 +29,7 @@ def get_room(room_id: int, db: Session = Depends(get_db)):
 
 
 @router.put("/{room_id}", response_model=RoomResponse)
-def update_room(
-    room_id: int, data: RoomUpdate, db: Session = Depends(get_db)
-):
+def update_room(room_id: int, data: RoomUpdate, db: Session = Depends(get_db)):
     return RoomService.update(db, room_id, data)
 
 

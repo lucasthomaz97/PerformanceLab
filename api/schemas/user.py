@@ -26,7 +26,8 @@ class UserCreate(BaseModel):
     def validate_phone(cls, v: str | None) -> str | None:
         if v is not None and not re.match(r"^\+?[\d\s\-()]{7,20}$", v):
             raise ValueError(
-                "phone must be a valid format (7-20 digits, optional +, spaces, dashes, parentheses)"
+                "phone must be a valid format "
+                "(7-20 digits, optional +, spaces, dashes, parentheses)"
             )
         return v
 
@@ -55,7 +56,8 @@ class UserUpdate(BaseModel):
     def validate_phone(cls, v: str | None) -> str | None:
         if v is not None and not re.match(r"^\+?[\d\s\-()]{7,20}$", v):
             raise ValueError(
-                "phone must be a valid format (7-20 digits, optional +, spaces, dashes, parentheses)"
+                "phone must be a valid format "
+                "(7-20 digits, optional +, spaces, dashes, parentheses)"
             )
         return v
 

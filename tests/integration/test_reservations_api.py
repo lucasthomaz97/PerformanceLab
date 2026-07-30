@@ -1,5 +1,3 @@
-from datetime import date
-
 from fastapi import status
 from freezegun import freeze_time
 

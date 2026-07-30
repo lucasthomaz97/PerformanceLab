@@ -20,9 +20,7 @@ class ReservationCreate(BaseModel):
 
     @field_validator("check_out")
     @classmethod
-    def validate_check_out(
-        cls, v: datetime.date, info
-    ) -> datetime.date:
+    def validate_check_out(cls, v: datetime.date, info) -> datetime.date:
         if "check_in" in info.data and v <= info.data["check_in"]:
             raise ValueError("check_out must be after check_in")
         return v

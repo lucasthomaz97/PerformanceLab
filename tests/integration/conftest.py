@@ -1,5 +1,4 @@
 from collections.abc import Generator
-from datetime import date
 from decimal import Decimal
 
 import pytest
@@ -18,7 +17,6 @@ from api.schemas.user import UserCreate
 from api.services.room_service import RoomService
 from api.services.user_service import UserService
 
-
 FROZEN_DATE = "2026-07-01"
 
 
@@ -32,7 +30,7 @@ def engine():
 
 
 @pytest.fixture
-def db_session(engine) -> Generator[Session, None, None]:
+def db_session(engine) -> Generator[Session]:
     Base.metadata.create_all(bind=engine)
     session = Session(bind=engine, expire_on_commit=False)
     try:
@@ -43,7 +41,7 @@ def db_session(engine) -> Generator[Session, None, None]:
 
 
 @pytest.fixture
-def client(db_session) -> Generator[TestClient, None, None]:
+def client(db_session) -> Generator[TestClient]:
     test_app = FastAPI()
     test_app.include_router(users.router)
     test_app.include_router(rooms.router)
@@ -71,15 +69,11 @@ def second_user(db_session: Session) -> User:
 
 @pytest.fixture
 def room(db_session: Session) -> Room:
-    data = RoomCreate(
-        name="101", capacity=2, price_per_night=Decimal("150.00")
-    )
+    data = RoomCreate(name="101", capacity=2, price_per_night=Decimal("150.00"))
     return RoomService.create(db_session, data)
 
 
 @pytest.fixture
 def second_room(db_session: Session) -> Room:
-    data = RoomCreate(
-        name="102", capacity=4, price_per_night=Decimal("250.00")
-    )
+    data = RoomCreate(name="102", capacity=4, price_per_night=Decimal("250.00"))
     return RoomService.create(db_session, data)

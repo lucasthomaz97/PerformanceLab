@@ -12,15 +12,11 @@ class TestUserCreate:
         assert data.phone is None
 
     def test_valid_with_phone(self):
-        data = UserCreate(
-            name="Bob", email="bob@test.com", phone="+55 11 99999-9999"
-        )
+        data = UserCreate(name="Bob", email="bob@test.com", phone="+55 11 99999-9999")
         assert data.phone == "+55 11 99999-9999"
 
     def test_valid_phone_simple_digits(self):
-        data = UserCreate(
-            name="Charlie", email="charlie@test.com", phone="11999999999"
-        )
+        data = UserCreate(name="Charlie", email="charlie@test.com", phone="11999999999")
         assert data.phone == "11999999999"
 
     def test_trailing_whitespace_stripped(self):
@@ -77,9 +73,7 @@ class TestUserUpdate:
         assert data.phone == "+55 21 98888-8888"
 
     def test_valid_all_fields(self):
-        data = UserUpdate(
-            name="Alice", email="alice@test.com", phone="11999999999"
-        )
+        data = UserUpdate(name="Alice", email="alice@test.com", phone="11999999999")
         assert data.name == "Alice"
         assert data.email == "alice@test.com"
         assert data.phone == "11999999999"

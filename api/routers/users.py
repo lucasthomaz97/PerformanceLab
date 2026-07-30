@@ -14,9 +14,7 @@ def create_user(data: UserCreate, db: Session = Depends(get_db)):
 
 
 @router.get("/", response_model=list[UserResponse])
-def list_users(
-    skip: int = 0, limit: int = 100, db: Session = Depends(get_db)
-):
+def list_users(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     return UserService.get_multi(db, skip=skip, limit=limit)
 
 
@@ -26,9 +24,7 @@ def get_user(user_id: int, db: Session = Depends(get_db)):
 
 
 @router.put("/{user_id}", response_model=UserResponse)
-def update_user(
-    user_id: int, data: UserUpdate, db: Session = Depends(get_db)
-):
+def update_user(user_id: int, data: UserUpdate, db: Session = Depends(get_db)):
     return UserService.update(db, user_id, data)
 
 
