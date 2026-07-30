@@ -2,6 +2,8 @@
 
 > Room reservation management / Gerenciamento de reservas de salas
 
+[![CI](https://github.com/lucas/performancelab/actions/workflows/ci.yml/badge.svg)](https://github.com/lucas/performancelab/actions/workflows/ci.yml)
+
 [**English**](#english) &nbsp;|&nbsp; [**Português**](#português-pt-br)
 
 ---
@@ -119,6 +121,15 @@ uv run pytest tests/ -v
 ```
 
 See [tests/README.md](tests/README.md) for a full description of every test.
+
+### CI/CD
+
+Every push and pull request to `main` runs:
+
+1. **Lint** — `ruff check .`
+2. **Type check** — `mypy api/`
+3. **Test with coverage** — `pytest tests/ -v --cov=api --cov-report=term-missing` against a PostgreSQL 17 service container
+4. **Coverage artifact** uploaded on every run
 
 ### Interactive docs
 
@@ -240,6 +251,15 @@ uv run pytest tests/ -v
 ```
 
 Consulte [tests/README.md](tests/README.md) para a descrição completa de cada teste.
+
+### CI/CD
+
+Cada push e pull request para `main` executa:
+
+1. **Lint** — `ruff check .`
+2. **Type check** — `mypy api/`
+3. **Testes com cobertura** — `pytest tests/ -v --cov=api --cov-report=term-missing` em container PostgreSQL 17
+4. **Artefato de cobertura** enviado a cada execução
 
 ### Documentação interativa
 
