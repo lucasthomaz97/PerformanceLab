@@ -1,4 +1,5 @@
 from fastapi import HTTPException, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from api.models.reservation import Reservation, ReservationStatus
@@ -51,7 +52,14 @@ class ReservationService:
             check_out=data.check_out,
         )
         db.add(reservation)
-        db.commit()
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="room already reserved for the selected dates",
+            )
         db.refresh(reservation)
         return reservation
 

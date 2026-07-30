@@ -1,8 +1,10 @@
 from datetime import date
+from unittest.mock import patch
 
 import pytest
 from fastapi import HTTPException
 from freezegun import freeze_time
+from sqlalchemy.exc import IntegrityError
 
 from api.models.reservation import ReservationStatus
 from api.schemas.reservation import ReservationCreate
@@ -264,6 +266,27 @@ class TestCreateReservation:
         assert result.check_in == date(2026, 8, 1)
         assert result.check_out == date(2026, 8, 10)
         assert result.status == ReservationStatus.CONFIRMED
+
+    @freeze_time(FROZEN_DATE)
+    def test_create_reservation_db_constraint_race(
+        self, db_session, user, room
+    ):
+        data = ReservationCreate(
+            user_id=user.id,
+            room_id=room.id,
+            check_in=date(2026, 8, 1),
+            check_out=date(2026, 8, 5),
+        )
+        error = IntegrityError(
+            "INSERT INTO reservations ...",
+            {},
+            Exception("duplicate key value violates unique constraint"),
+        )
+        with patch.object(db_session, "commit", side_effect=error):
+            with pytest.raises(HTTPException) as exc:
+                ReservationService.create(db_session, data)
+        assert exc.value.status_code == 409
+        assert exc.value.detail == "room already reserved for the selected dates"
 
 
 class TestCancelReservation:
