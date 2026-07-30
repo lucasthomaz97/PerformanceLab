@@ -1,33 +1,22 @@
-from contextlib import asynccontextmanager
 from collections.abc import Generator
-from datetime import date, timedelta
+from datetime import date
 from decimal import Decimal
 
 import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from freezegun import freeze_time
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 from api.database import Base, get_db
-from api.main import app
 from api.models.reservation import Reservation, ReservationStatus  # noqa: F401
-from api.models.room import Room  # noqa: F401
-from api.models.user import User  # noqa: F401
-from api.schemas.reservation import ReservationCreate
+from api.models.room import Room
+from api.models.user import User
+from api.routers import reservations, rooms, users
 from api.schemas.room import RoomCreate
 from api.schemas.user import UserCreate
-from api.services.reservation_service import ReservationService
 from api.services.room_service import RoomService
 from api.services.user_service import UserService
-
-
-@asynccontextmanager
-async def _test_lifespan(app):
-    yield
-
-
-app.lifespan = _test_lifespan
 
 
 FROZEN_DATE = "2026-07-01"
@@ -55,15 +44,17 @@ def db_session(engine) -> Generator[Session, None, None]:
 
 @pytest.fixture
 def client(db_session) -> Generator[TestClient, None, None]:
+    test_app = FastAPI()
+    test_app.include_router(users.router)
+    test_app.include_router(rooms.router)
+    test_app.include_router(reservations.router)
+
     def override_get_db():
         yield db_session
 
-    app.dependency_overrides[get_db] = override_get_db
-    try:
-        with TestClient(app) as c:
-            yield c
-    finally:
-        app.dependency_overrides.clear()
+    test_app.dependency_overrides[get_db] = override_get_db
+    with TestClient(test_app) as c:
+        yield c
 
 
 @pytest.fixture
@@ -92,17 +83,3 @@ def second_room(db_session: Session) -> Room:
         name="102", capacity=4, price_per_night=Decimal("250.00")
     )
     return RoomService.create(db_session, data)
-
-
-@pytest.fixture
-@freeze_time(FROZEN_DATE)
-def reservation(
-    db_session: Session, user: User, room: Room
-) -> Reservation:
-    data = ReservationCreate(
-        user_id=user.id,
-        room_id=room.id,
-        check_in=date(2026, 7, 2),
-        check_out=date(2026, 7, 5),
-    )
-    return ReservationService.create(db_session, data)
