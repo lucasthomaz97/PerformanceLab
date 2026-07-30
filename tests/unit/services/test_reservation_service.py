@@ -124,6 +124,9 @@ class TestCreateReservation:
                 ),
             )
         assert exc.value.status_code == 409
+        assert (
+            exc.value.detail == "room already reserved for the selected dates"
+        )
 
     @freeze_time(FROZEN_DATE)
     def test_create_overlap_ends_after(
@@ -149,6 +152,9 @@ class TestCreateReservation:
                 ),
             )
         assert exc.value.status_code == 409
+        assert (
+            exc.value.detail == "room already reserved for the selected dates"
+        )
 
     @freeze_time(FROZEN_DATE)
     def test_create_overlap_contains(
@@ -174,6 +180,9 @@ class TestCreateReservation:
                 ),
             )
         assert exc.value.status_code == 409
+        assert (
+            exc.value.detail == "room already reserved for the selected dates"
+        )
 
     @freeze_time(FROZEN_DATE)
     def test_create_no_overlap_adjacent(
@@ -222,7 +231,11 @@ class TestCreateReservation:
                 check_out=date(2026, 8, 15),
             ),
         )
-        assert result.id is not None
+        assert result.user_id == user.id
+        assert result.room_id == room.id
+        assert result.check_in == date(2026, 8, 10)
+        assert result.check_out == date(2026, 8, 15)
+        assert result.status == ReservationStatus.CONFIRMED
 
     @freeze_time(FROZEN_DATE)
     def test_create_different_rooms_no_conflict(
@@ -246,7 +259,11 @@ class TestCreateReservation:
                 check_out=date(2026, 8, 10),
             ),
         )
-        assert result.id is not None
+        assert result.user_id == user.id
+        assert result.room_id == second_room.id
+        assert result.check_in == date(2026, 8, 1)
+        assert result.check_out == date(2026, 8, 10)
+        assert result.status == ReservationStatus.CONFIRMED
 
 
 class TestCancelReservation:

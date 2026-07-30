@@ -35,7 +35,7 @@ class UserService:
     def get_multi(
         db: Session, skip: int = 0, limit: int = 100
     ) -> list[User]:
-        return db.query(User).offset(skip).limit(limit).all()
+        return db.query(User).order_by(User.id).offset(skip).limit(limit).all()
 
     @staticmethod
     def update(db: Session, user_id: int, data: UserUpdate) -> User:

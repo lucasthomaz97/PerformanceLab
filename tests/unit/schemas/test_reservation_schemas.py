@@ -5,8 +5,7 @@ from freezegun import freeze_time
 from pydantic import ValidationError
 
 from api.schemas.reservation import ReservationCreate
-
-FROZEN_DATE = "2026-07-01"
+from tests.unit.conftest import FROZEN_DATE
 
 
 class TestReservationCreate:

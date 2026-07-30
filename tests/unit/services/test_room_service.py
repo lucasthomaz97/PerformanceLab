@@ -106,6 +106,7 @@ class TestUpdateRoom:
         with pytest.raises(HTTPException) as exc:
             RoomService.update(db_session, 999, data)
         assert exc.value.status_code == 404
+        assert exc.value.detail == "room not found"
 
     def test_update_room_duplicate_name(self, db_session, room, second_room):
         data = RoomUpdate(name=second_room.name)
@@ -125,6 +126,7 @@ class TestDeleteRoom:
         with pytest.raises(HTTPException) as exc:
             RoomService.delete(db_session, 999)
         assert exc.value.status_code == 404
+        assert exc.value.detail == "room not found"
 
     def test_delete_room_with_active_reservations(
         self, db_session, reservation

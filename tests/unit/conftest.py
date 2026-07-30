@@ -68,18 +68,13 @@ FROZEN_DATE = "2026-07-01"
 
 @pytest.fixture
 @freeze_time(FROZEN_DATE)
-def reservation_data(user: User, room: Room) -> ReservationCreate:
-    return ReservationCreate(
+def reservation(
+    db_session: Session, user: User, room: Room
+) -> Reservation:
+    data = ReservationCreate(
         user_id=user.id,
         room_id=room.id,
         check_in=date(2026, 7, 2),
         check_out=date(2026, 7, 5),
     )
-
-
-@pytest.fixture
-@freeze_time(FROZEN_DATE)
-def reservation(
-    db_session: Session, reservation_data: ReservationCreate
-) -> Reservation:
-    return ReservationService.create(db_session, reservation_data)
+    return ReservationService.create(db_session, data)
