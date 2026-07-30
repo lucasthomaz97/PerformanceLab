@@ -72,9 +72,8 @@ Shared fixtures auto-discovered by pytest (available in all subdirectories):
 | `second_user`     | Pre-created second user (Bob)                 |
 | `room`            | Pre-created room (101, 2 guests)              |
 | `second_room`     | Pre-created second room (102, 4 guests)       |
-| `reservation`     | Pre-created reservation (user + room)         |
 
-> **Note**: The same fixtures are also available in `tests/integration/conftest.py` for integration tests.
+> Integration tests (`tests/integration/conftest.py`) provide a `client` fixture (FastAPI TestClient wrapping a fresh app instance) plus the same `user`, `second_user`, `room`, and `second_room` fixtures.
 
 ## Service Tests (`services/`)
 
@@ -144,6 +143,40 @@ Shared fixtures auto-discovered by pytest (available in all subdirectories):
 | **TestListRoomReservations** | `test_list_room_reservations`                     | All reservations for a room returned                   |
 |                              | `test_list_room_reservations_empty`               | Room with no reservations returns empty list           |
 |                              | `test_list_room_reservations_room_inactive`       | Inactive room returns 404                              |
+
+## Integration Tests (`integration/`)
+
+HTTP-layer tests using FastAPI TestClient. Each test verifies status codes, response shapes, and serialization for happy-path flows. Business rules, edge cases, and error paths are covered by unit tests instead.
+
+### `integration/test_users_api.py`
+
+| Class                | Test                        | What it verifies                        |
+| -------------------- | --------------------------- | --------------------------------------- |
+| **TestCreateUser**   | `test_create_user`          | POST /users/ returns 201 with full body |
+| **TestGetUser**      | `test_get_user`             | GET /users/{id} returns 200             |
+| **TestListUsers**    | `test_list_users_paginated` | GET /users/ with skip/limit params      |
+| **TestUpdateUser**   | `test_update_user`          | PUT /users/{id} partial update returns 200 |
+| **TestDeleteUser**   | `test_delete_user`          | DELETE /users/{id} returns 204, GET confirms deletion |
+
+### `integration/test_rooms_api.py`
+
+| Class                | Test                           | What it verifies                        |
+| -------------------- | ------------------------------ | --------------------------------------- |
+| **TestCreateRoom**   | `test_create_room`             | POST /rooms/ returns 201 with full body |
+| **TestGetRoom**      | `test_get_room`                | GET /rooms/{id} returns 200             |
+| **TestListRooms**    | `test_list_rooms_returns_all`  | GET /rooms/ returns all rooms           |
+|                      | `test_list_rooms_paginated`    | GET /rooms/ with skip/limit params      |
+| **TestUpdateRoom**   | `test_update_room`             | PUT /rooms/{id} partial update returns 200 |
+| **TestDeleteRoom**   | `test_delete_room`             | DELETE /rooms/{id} returns 204          |
+
+### `integration/test_reservations_api.py`
+
+| Class                         | Test                           | What it verifies                                  |
+| ----------------------------- | ------------------------------ | ------------------------------------------------- |
+| **TestCreateReservation**     | `test_create_reservation`      | POST /reservations/ returns 201 with full body    |
+| **TestCancelReservation**     | `test_cancel_reservation`      | PATCH /reservations/{id}/cancel with 200 + status |
+| **TestListUserReservations**  | `test_list_user_reservations`  | GET /reservations/user/{id} returns all           |
+| **TestListRoomReservations**  | `test_list_room_reservations`  | GET /reservations/room/{id} returns all           |
 
 ## Schema Tests (`schemas/`)
 

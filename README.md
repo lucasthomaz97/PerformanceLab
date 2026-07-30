@@ -23,7 +23,7 @@ REST API for room, user and reservation management. Built with **FastAPI**, **SQ
 ```
 api/
 ├── main.py                 # FastAPI app, lifespan with create_all
-├── config.py               # Config (DATABASE_URL via env var)
+├── config.py               # Config (DB_* env vars)
 ├── database.py             # SQLAlchemy engine, session, declarative base
 ├── models/
 │   ├── user.py             # User model
@@ -144,7 +144,7 @@ API REST para gerenciamento de salas, usuários e reservas. Desenvolvida com **F
 ```
 api/
 ├── main.py                 # App FastAPI, lifespan com create_all
-├── config.py               # Config (DATABASE_URL via variável de ambiente)
+├── config.py               # Config (DB_* via variáveis de ambiente)
 ├── database.py             # Engine SQLAlchemy, Sessão, Base declarativa
 ├── models/
 │   ├── user.py             # Modelo User
