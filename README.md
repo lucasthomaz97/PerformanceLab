@@ -2,8 +2,6 @@
 
 > Room reservation management / Gerenciamento de reservas de salas
 
-[![CI](https://github.com/lucas/performancelab/actions/workflows/ci.yml/badge.svg)](https://github.com/lucas/performancelab/actions/workflows/ci.yml)
-
 [**English**](#english) &nbsp;|&nbsp; [**Português**](#português-pt-br)
 
 ---
