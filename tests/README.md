@@ -277,3 +277,69 @@ ORM model tests — validates defaults, constraints, cascades, and enum values. 
 | **TestRoomUniqueName**     | `test_duplicate_name_raises`                | DB-level IntegrityError on duplicate room name      |
 | **TestUserCascadeDelete**  | `test_delete_user_cascades_to_reservations` | Deleting user cascades to reservations              |
 | **TestRoomCascadeDelete**  | `test_delete_room_cascades_to_reservations` | Deleting room cascades to reservations              |
+
+## Performance & Load Tests (`performance/load/`)
+
+Load tests are **k6** scripts (not pytest). They target a running server and are designed to explore the app's concurrency limits — specifically the SQLAlchemy connection pool (`pool_size=5`, `max_overflow=10`, i.e. 15 connections) behind the 40-thread anyio pool used for sync endpoints (see README "Known limitations").
+
+### How to run
+
+Requires [k6](https://k6.io/docs/getting-started/installation/) installed (it is not a Python dependency). The server must be running first (e.g. `uv run uvicorn api.main:app`).
+
+```bash
+# Default profile (load)
+k6 run tests/performance/load/get_users.js
+
+# Get a user by id (id derived from __VU last digit, 0 -> 10)
+k6 run tests/performance/load/get_user_by_id.js
+
+# Pick a profile and target
+k6 run tests/performance/load/post_users.js \
+  -e K6_SCENARIO=staircase \
+  -e BASE_URL=http://localhost:8000
+
+# Soak with a custom hold duration
+k6 run tests/performance/load/get_users.js -e K6_SCENARIO=soak -e K6_SOAK_DURATION=15m
+
+# Export results for analysis
+k6 run tests/performance/load/get_users.js --out json=results.json
+```
+
+### Profiles
+
+| Profile     | Executor      | Load (VUs)                     | Purpose                                 |
+| ----------- | ------------- | ------------------------------ | --------------------------------------- |
+| `smoke`     | constant-vus  | 3, 30s                         | Sanity check that the script works      |
+| `load`      | ramping-vus   | ramp to 25, hold, ramp to 50   | Baseline under typical load             |
+| `staircase` | ramping-vus   | 5,10,15,20,25,30,40,50 (45s ea)| Find the concurrency knee               |
+| `soak`      | ramping-vus   | ramp to 40, hold 10m (default) | Detect connection growth / leaks        |
+
+Select with `-e K6_SCENARIO=<name>`. The `staircase` profile holds each step ~45s so percentile metrics are stable.
+
+### Thresholds
+
+All three thresholds use `abortOnFail: false` so the test **records** saturation instead of stopping at it:
+
+- `http_req_failed`: `rate < 0.01`
+- `http_req_duration`: `p(95) < 500`
+- `http_req_waiting`: `p(95) < 500` — time-to-first-byte, the metric that exposes DB-pool queueing
+
+### How to read the knee
+
+When concurrency exceeds the pool/threadpool capacity, requests queue inside the app before hitting the DB. Symptoms:
+
+1. `http_req_waiting` (TTFB) p95 breaks the 500ms threshold while `http_req_blocked` stays near 0 (keep-alive; the wait is server-side, not network).
+2. Throughput (`http_reqs`/RPS) plateaus even as VUs increase.
+3. At the extreme, requests exceed `pool_timeout` (30s default) and return 500s; the console log shows `TimeoutError` / `OperationalError` in the response body — the pool-exhaustion signature.
+
+Expected knee: somewhere in the 15–40 VU range for this app (pool = 15 connections, threadpool = 40).
+
+### Correlating with the DB (optional)
+
+k6 shows the symptom; confirm the cause during a run by polling Postgres:
+
+```sql
+SELECT count(*) FROM pg_stat_activity WHERE datname = 'performancelab';
+```
+
+Connections capping at 15 while latency climbs = pool contention (not the threadpool).

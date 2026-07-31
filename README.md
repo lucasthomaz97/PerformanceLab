@@ -110,6 +110,10 @@ Tables are created automatically on startup via `Base.metadata.create_all`.
 - A user can only be deleted if they have **no active reservations**.
 - A room can only be deactivated if it has **no active reservations**.
 
+### Known limitations
+
+- **DB connection pool is not tuned for high concurrency.** `api/database.py` uses SQLAlchemy's default pool (`pool_size=5`, `max_overflow=10`), and endpoints are sync `def`, so FastAPI runs them on anyio's threadpool (capped at 40 threads). Under concurrent load (e.g. 50 VUs), requests queue on both the threadpool and the connection pool, so latency climbs regardless of endpoint. Load tests in `tests/performance/load/` are designed to expose this. Fixes to consider: raise `pool_size`/`max_overflow` (ideally env-driven), enable `pool_pre_ping`, or migrate to an async engine and `async def` endpoints.
+
 ### Tests
 
 Tests are in `tests/` (unit tests in `tests/unit/`, integration tests in `tests/integration/`). Run all with:
@@ -239,6 +243,10 @@ As tabelas são criadas automaticamente na inicialização via `Base.metadata.cr
 - Uma reserva só pode ser cancelada se estiver com status **confirmed**.
 - Um usuário só pode ser excluído se **não tiver reservas ativas**.
 - Uma sala só pode ser desativada se **não tiver reservas ativas**.
+
+### Limitações conhecidas
+
+- **Pool de conexões não configurado para alta concorrência.** `api/database.py` usa o pool padrão do SQLAlchemy (`pool_size=5`, `max_overflow=10`), e os endpoints são `def` síncronos, então o FastAPI os executa no threadpool do anyio (limitado a 40 threads). Sob carga concorrente (ex.: 50 VUs), as requisições ficam enfileiradas tanto no threadpool quanto no pool de conexões, fazendo a latência aumentar independentemente do endpoint. Os testes de carga em `tests/performance/load/` foram criados para expor isso. Correções a considerar: aumentar `pool_size`/`max_overflow` (idealmente via variáveis de ambiente), habilitar `pool_pre_ping`, ou migrar para engine assíncrono e endpoints `async def`.
 
 ### Testes
 
