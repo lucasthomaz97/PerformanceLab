@@ -27,7 +27,7 @@ class Reservation(Base):
     check_in: Mapped[datetime.date] = mapped_column(Date, nullable=False)
     check_out: Mapped[datetime.date] = mapped_column(Date, nullable=False)
     status: Mapped[ReservationStatus] = mapped_column(
-        Enum(ReservationStatus),
+        Enum(ReservationStatus, values_callable=lambda e: [m.value for m in e]),
         default=ReservationStatus.CONFIRMED,
         nullable=False,
     )

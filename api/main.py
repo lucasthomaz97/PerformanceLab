@@ -15,12 +15,16 @@ async def lifespan(app: FastAPI):
             conn.execute(text("CREATE EXTENSION IF NOT EXISTS btree_gist"))
             conn.execute(
                 text(
+                    "DO $$ BEGIN "
+                    "IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'no_overlap') THEN "
                     "ALTER TABLE reservations "
-                    "ADD CONSTRAINT IF NOT EXISTS no_overlap "
+                    "ADD CONSTRAINT no_overlap "
                     "EXCLUDE USING gist ("
                     "  room_id WITH =,"
                     "  daterange(check_in, check_out) WITH &&"
-                    ") WHERE (status = 'confirmed')"
+                    ") WHERE (status = 'confirmed'); "
+                    "END IF; "
+                    "END $$;"
                 )
             )
     yield
