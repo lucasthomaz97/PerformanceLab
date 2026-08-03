@@ -293,6 +293,15 @@ k6 run tests/performance/load/get_users.js
 # Get a user by id (id derived from __VU last digit, 0 -> 10)
 k6 run tests/performance/load/get_user_by_id.js
 
+# Update a user by id (id derived from __VU last digit, 0 -> 10)
+k6 run tests/performance/load/put_user_by_id.js
+
+# Delete users from a pool created via the /seed/users route in setup()
+k6 run tests/performance/load/delete_user.js
+
+# Override the delete seed pool size (otherwise computed from the profile)
+k6 run tests/performance/load/delete_user.js -e K6_DELETE_POOL_SIZE=5000
+
 # Pick a profile and target
 k6 run tests/performance/load/post_users.js \
   -e K6_SCENARIO=staircase \
@@ -315,6 +324,18 @@ k6 run tests/performance/load/get_users.js --out json=results.json
 | `soak`      | ramping-vus   | ramp to 40, hold 10m (default) | Detect connection growth / leaks        |
 
 Select with `-e K6_SCENARIO=<name>`. The `staircase` profile holds each step ~45s so percentile metrics are stable.
+
+### Delete-test seed pool
+
+`delete_user.js` uses the same scenarios. Because `DELETE /users/{id}` permanently removes rows, `setup()` calls the dedicated **`POST /seed/users`** route (not the business `POST /users`) with a quantity derived from the scenario so the pool never drains mid-run (only the route under test is hit during load):
+
+`quantity = maxVUs * (totalSeconds / AVG_ITER_SECONDS) * 1.2`, where `AVG_ITER_SECONDS = 1.0` (sleep is 500–1500ms, so real iterations are slightly slower — over-provisioning is the safe direction). The route bulk-inserts the users directly into Postgres and returns their ids; each VU is given a disjoint slice (`floor(poolSize / maxVUs)`) so no two VUs target the same id (no 404 races). Override with `-e K6_DELETE_POOL_SIZE=<n>`. Expect large seed counts on `soak`/`staircase` (e.g. ~7.9k on `load`, ~22k on `staircase`, ~33k on `soak`).
+
+`setupTimeout` is set to `10m` (default is 60s) so seeding large pools doesn't abort before VUs start.
+
+The seed route is authenticated: requests must send the `X-Seed-Key` header matching `SEED_API_KEY` from the project `.env`. k6 reads the key from `../../../.env` automatically, or you can override it with `-e SEED_API_KEY=<value>`.
+
+The load-test routes are only registered when `ENABLE_LOADTEST_ENDPOINTS=true` in `.env` (defaults to off/false when unset), so they are never exposed unless explicitly enabled.
 
 ### Thresholds
 
