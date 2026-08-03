@@ -1,14 +1,13 @@
 import http from 'k6/http';
 import { check, sleep } from 'k6';
+import { randomIntBetween } from '../../helpers/helpers.js';
+import { computePoolConfig, resolveSeedKey } from '../../helpers/delete_helpers.js';
 
 const BASE_URL = __ENV.BASE_URL || 'http://localhost:8000';
-const RUN_ID = Date.now();
 const SCENARIO = __ENV.K6_SCENARIO || 'load';
 const SOAK_DURATION = __ENV.K6_SOAK_DURATION || '10m';
 
-function randomIntBetween(min, max) {
-  return Math.floor(Math.random() * (max - min + 1)) + min;
-}
+const SEED_API_KEY = resolveSeedKey();
 
 const scenarios = {
   smoke: {
@@ -59,6 +58,7 @@ export const options = {
   scenarios: {
     [SCENARIO]: scenarios[SCENARIO],
   },
+  setupTimeout: '10m',
   thresholds: {
     http_req_failed: [{ threshold: 'rate<0.01', abortOnFail: false }],
     http_req_duration: [{ threshold: 'p(95)<500', abortOnFail: false }],
@@ -67,54 +67,48 @@ export const options = {
 };
 
 export function setup() {
-  const res = http.get(`${BASE_URL}/users`);
-  const count = res.status === 200 ? res.json().length : 0;
-  if (count >= 10) return;
-  for (let i = count; i < 10; i++) {
-    http.post(
-      `${BASE_URL}/users`,
-      JSON.stringify({
-        name: `Seed User ${i}`,
-        email: `seed-${RUN_ID}-${i}@example.com`,
-      }),
-      { headers: { 'Content-Type': 'application/json' } },
-    );
-  }
-}
+  const { poolSize, maxVus } = computePoolConfig(scenarios[SCENARIO]);
 
-export default function () {
-  const id = ((__VU - 1) % 10) + 1;
-  const name = `Load Test User ${__VU}-${__ITER}`;
-  const email = `load_test_user-${RUN_ID}-${__VU}-${__ITER}@example.com`;
-  const phone = '99999-9999';
-
-  const payload = JSON.stringify({ name, email, phone });
-
-  const response = http.put(
-    `${BASE_URL}/users/${id}`,
-    payload,
+  const res = http.post(
+    `${BASE_URL}/seed/users`,
+    JSON.stringify({ quantity: poolSize }),
     {
-      headers: { 'Content-Type': 'application/json' },
-      tags: { endpoint: `PUT /users/${id}` },
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Seed-Key': SEED_API_KEY,
+      },
+      tags: { endpoint: 'POST /seed/users' },
     },
   );
 
-  if (response.status >= 400) {
-    console.error(`PUT /users/${id} -> ${response.status}: ${response.body}`);
+  if (res.status !== 201) {
+    throw new Error(`seed POST /seed/users -> ${res.status}: ${res.body}`);
   }
 
-  const user = response.status === 200 ? response.json() : {};
+  const ids = res.json().ids;
+  const sliceSize = Math.floor(ids.length / maxVus);
+
+  console.info(`seeded ${ids.length} users, slice per VU: ${sliceSize}`);
+
+  return { ids, sliceSize };
+}
+
+export default function (data) {
+  const idx = ((__VU - 1) * data.sliceSize) + (__ITER % data.sliceSize);
+  const id = data.ids[idx];
+
+  const response = http.del(
+    `${BASE_URL}/users/${id}`,
+    null,
+    { tags: { endpoint: `DELETE /users/${id}` } },
+  );
+
+  if (response.status >= 400) {
+    console.error(`DELETE /users/${id} -> ${response.status}: ${response.body}`);
+  }
 
   check(response, {
-    'status 200': (r) => r.status === 200,
-  });
-
-  check(user, {
-    'has id': (u) => u.id !== undefined,
-    'id matches': (u) => u.id === id,
-    'name matches': (u) => u.name === name,
-    'email matches': (u) => u.email === email,
-    'has updated_at': (u) => u.updated_at !== undefined,
+    'status 204': (r) => r.status === 204,
   });
 
   sleep(randomIntBetween(500, 1500));

@@ -288,31 +288,33 @@ Requires [k6](https://k6.io/docs/getting-started/installation/) installed (it is
 
 ```bash
 # Default profile (load)
-k6 run tests/performance/load/get_users.js
+k6 run tests/performance/load/users/get_users.js
 
 # Get a user by id (id derived from __VU last digit, 0 -> 10)
-k6 run tests/performance/load/get_user_by_id.js
+k6 run tests/performance/load/users/get_user_by_id.js
 
 # Update a user by id (id derived from __VU last digit, 0 -> 10)
-k6 run tests/performance/load/put_user_by_id.js
+k6 run tests/performance/load/users/put_user_by_id.js
 
 # Delete users from a pool created via the /seed/users route in setup()
-k6 run tests/performance/load/delete_user.js
+k6 run tests/performance/load/users/delete_user.js
 
 # Override the delete seed pool size (otherwise computed from the profile)
-k6 run tests/performance/load/delete_user.js -e K6_DELETE_POOL_SIZE=5000
+k6 run tests/performance/load/users/delete_user.js -e K6_DELETE_POOL_SIZE=5000
 
 # Pick a profile and target
-k6 run tests/performance/load/post_users.js \
+k6 run tests/performance/load/users/post_users.js \
   -e K6_SCENARIO=staircase \
   -e BASE_URL=http://localhost:8000
 
 # Soak with a custom hold duration
-k6 run tests/performance/load/get_users.js -e K6_SCENARIO=soak -e K6_SOAK_DURATION=15m
+k6 run tests/performance/load/users/get_users.js -e K6_SCENARIO=soak -e K6_SOAK_DURATION=15m
 
 # Export results for analysis
-k6 run tests/performance/load/get_users.js --out json=results.json
+k6 run tests/performance/load/users/get_users.js --out json=results.json
 ```
+
+The user scripts share the `randomIntBetween` helper from `tests/performance/load/helpers.js`; the delete test additionally uses `tests/performance/load/delete_helpers.js` (`resolveSeedKey`, `parseDuration`, `computePoolConfig`).
 
 ### Profiles
 
@@ -333,7 +335,7 @@ Select with `-e K6_SCENARIO=<name>`. The `staircase` profile holds each step ~45
 
 `setupTimeout` is set to `10m` (default is 60s) so seeding large pools doesn't abort before VUs start.
 
-The seed route is authenticated: requests must send the `X-Seed-Key` header matching `SEED_API_KEY` from the project `.env`. k6 reads the key from `../../../.env` automatically, or you can override it with `-e SEED_API_KEY=<value>`.
+The seed route is authenticated: requests must send the `X-Seed-Key` header matching `SEED_API_KEY` from the project `.env`. k6 reads the key from `../../../../.env` (relative to the script under `users/`) automatically, or you can override it with `-e SEED_API_KEY=<value>`.
 
 The load-test routes are only registered when `ENABLE_LOADTEST_ENDPOINTS=true` in `.env` (defaults to off/false when unset), so they are never exposed unless explicitly enabled.
 

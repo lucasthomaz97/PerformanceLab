@@ -1,14 +1,10 @@
 import http from 'k6/http';
 import { check, sleep } from 'k6';
+import { randomIntBetween } from '../../helpers/helpers.js';
 
 const BASE_URL = __ENV.BASE_URL || 'http://localhost:8000';
-const RUN_ID = Date.now();
 const SCENARIO = __ENV.K6_SCENARIO || 'load';
 const SOAK_DURATION = __ENV.K6_SOAK_DURATION || '10m';
-
-function randomIntBetween(min, max) {
-  return Math.floor(Math.random() * (max - min + 1)) + min;
-}
 
 const scenarios = {
   smoke: {
@@ -70,42 +66,38 @@ export const options = {
 
 export function setup() {
   const res = http.get(`${BASE_URL}/users`);
-  const count = res.status === 200 ? res.json().length : 0;
-  if (count >= 10) return;
-  for (let i = count; i < 10; i++) {
+  if (res.status === 200 && res.json().length === 0) {
     http.post(
       `${BASE_URL}/users`,
-      JSON.stringify({
-        name: `Seed User ${i}`,
-        email: `seed-${RUN_ID}-${i}@example.com`,
-      }),
+      JSON.stringify({ name: 'Seed User', email: 'seed-user@example.com' }),
       { headers: { 'Content-Type': 'application/json' } },
     );
   }
 }
 
 export default function () {
-  const id = ((__VU - 1) % 10) + 1;
-
-  const response = http.get(`${BASE_URL}/users/${id}`, {
-    tags: { endpoint: `GET /users/${id}` },
+  const response = http.get(`${BASE_URL}/users`, {
+    tags: { endpoint: 'GET /users' },
   });
 
   if (response.status >= 400) {
-    console.error(`GET /users/${id} -> ${response.status}: ${response.body}`);
+    console.error(`GET /users -> ${response.status}: ${response.body}`);
   }
 
-  const user = response.status === 200 ? response.json() : {};
+  const users = response.status === 200 ? response.json() : [];
 
   check(response, {
     'status 200': (r) => r.status === 200,
+    'body not empty': (r) => r.body.length > 0,
   });
 
-  check(user, {
-    'has id': (u) => u.id !== undefined,
-    'id matches': (u) => u.id === id,
-    'has name': (u) => u.name !== undefined,
-    'has email': (u) => u.email !== undefined,
+  check(users, {
+    'has users': (u) => u.length > 0,
+    'has id': (u) => u.every((user) => user.id !== undefined),
+    'has name': (u) => u.every((user) => user.name !== undefined),
+    'has email': (u) => u.every((user) => user.email !== undefined),
+    'has created_at': (u) => u.every((user) => user.created_at !== undefined),
+    'has updated_at': (u) => u.every((user) => user.updated_at !== undefined),
   });
 
   sleep(randomIntBetween(500, 1500));

@@ -1,14 +1,11 @@
 import http from 'k6/http';
 import { check, sleep } from 'k6';
+import { randomIntBetween } from '../../helpers/helpers.js';
 
 const BASE_URL = __ENV.BASE_URL || 'http://localhost:8000';
 const RUN_ID = Date.now();
 const SCENARIO = __ENV.K6_SCENARIO || 'load';
 const SOAK_DURATION = __ENV.K6_SOAK_DURATION || '10m';
-
-function randomIntBetween(min, max) {
-  return Math.floor(Math.random() * (max - min + 1)) + min;
-}
 
 const scenarios = {
   smoke: {
