@@ -3,8 +3,9 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from sqlalchemy import text
 
+from api.config import ENABLE_LOADTEST_ENDPOINTS
 from api.database import Base, engine
-from api.routers import reservations, rooms, users
+from api.routers import reservations, rooms, seed, users
 
 
 @asynccontextmanager
@@ -16,7 +17,9 @@ async def lifespan(app: FastAPI):
             conn.execute(
                 text(
                     "DO $$ BEGIN "
-                    "IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'no_overlap') THEN "
+                    "IF NOT EXISTS "
+                    "(SELECT 1 FROM pg_constraint "
+                    "WHERE conname = 'no_overlap') THEN "
                     "ALTER TABLE reservations "
                     "ADD CONSTRAINT no_overlap "
                     "EXCLUDE USING gist ("
@@ -35,3 +38,5 @@ app = FastAPI(title="PerformanceLab API", lifespan=lifespan)
 app.include_router(users.router)
 app.include_router(rooms.router)
 app.include_router(reservations.router)
+if ENABLE_LOADTEST_ENDPOINTS:
+    app.include_router(seed.router)

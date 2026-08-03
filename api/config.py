@@ -11,3 +11,7 @@ DB_PASSWORD: str = os.getenv("DB_PASSWORD", "postgres")
 DB_HOST: str = os.getenv("DB_HOST", "localhost")
 DB_PORT: int = int(os.getenv("DB_PORT", "5432"))
 DB_NAME: str = os.getenv("DB_NAME", "performancelab")
+SEED_API_KEY: str = os.getenv("SEED_API_KEY", "")
+ENABLE_LOADTEST_ENDPOINTS: bool = os.getenv(
+    "ENABLE_LOADTEST_ENDPOINTS", "false"
+).lower() in {"1", "true", "yes", "on"}

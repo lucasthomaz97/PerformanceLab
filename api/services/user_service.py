@@ -1,4 +1,7 @@
+import time
+
 from fastapi import HTTPException, status
+from sqlalchemy import insert
 from sqlalchemy.orm import Session
 
 from api.models.reservation import Reservation, ReservationStatus
@@ -55,6 +58,26 @@ class UserService:
         db.commit()
         db.refresh(user)
         return user
+
+    @staticmethod
+    def seed(db: Session, quantity: int) -> list[int]:
+        run_id = time.time_ns()
+        emails = [f"seed-{run_id}-{i}@example.com" for i in range(quantity)]
+        db.execute(
+            insert(User),
+            [
+                {"name": f"Seed User {i}", "email": emails[i]}
+                for i in range(quantity)
+            ],
+        )
+        db.commit()
+        ids = (
+            db.query(User.id)
+            .filter(User.email.in_(emails))
+            .order_by(User.id)
+            .all()
+        )
+        return [row[0] for row in ids]
 
     @staticmethod
     def delete(db: Session, user_id: int) -> None:
