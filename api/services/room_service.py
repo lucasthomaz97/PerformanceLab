@@ -1,4 +1,8 @@
+import time
+from decimal import Decimal
+
 from fastapi import HTTPException, status
+from sqlalchemy import insert
 from sqlalchemy.orm import Session
 
 from api.models.reservation import Reservation, ReservationStatus
@@ -44,6 +48,30 @@ class RoomService:
         if active_only:
             query = query.filter(Room.is_active.is_(True))
         return query.offset(skip).limit(limit).all()
+
+    @staticmethod
+    def seed(db: Session, quantity: int) -> list[int]:
+        run_id = time.time_ns()
+        names = [f"Seed Room {run_id}-{i}" for i in range(quantity)]
+        db.execute(
+            insert(Room),
+            [
+                {
+                    "name": names[i],
+                    "capacity": 2,
+                    "price_per_night": Decimal("99.99"),
+                }
+                for i in range(quantity)
+            ],
+        )
+        db.commit()
+        ids = (
+            db.query(Room.id)
+            .filter(Room.name.in_(names))
+            .order_by(Room.id)
+            .all()
+        )
+        return [row[0] for row in ids]
 
     @staticmethod
     def update(db: Session, room_id: int, data: RoomUpdate) -> Room:
