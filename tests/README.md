@@ -1,5 +1,11 @@
 # Unit & Integration Tests
 
+[**English**](#english) &nbsp;|&nbsp; [**Português**](#português-pt-br)
+
+---
+
+## English
+
 Unit tests use **pytest** with an in-memory SQLite database for service tests, and pure Pydantic for schema tests (no external database needed).
 
 Integration tests use **FastAPI TestClient** (`httpx2`) with the same in-memory SQLite to validate the HTTP layer (status codes, response shapes, error propagation).
@@ -13,6 +19,15 @@ tests/
 │   ├── test_users_api.py
 │   ├── test_rooms_api.py
 │   └── test_reservations_api.py
+├── performance/         # k6 load tests (not pytest) - see "Performance & Load Tests"
+│   ├── helpers/
+│   │   ├── helpers.js         # randomIntBetween shared helper
+│   │   ├── delete_helpers.js  # resolveSeedKey, parseDuration, computePoolConfig
+│   │   └── scenarios.js       # shared smoke/load/staircase/soak/spike profiles
+│   └── load/
+│       ├── users/             # one k6 script per HTTP operation
+│       ├── rooms/
+│       └── reservations/
 └── unit/                # Unit tests (service/schema/model/config)
     ├── conftest.py      # Shared fixtures (engine, db_session, user, room, etc.)
     ├── config/          # Config module tests (mocked env, no DB)
@@ -420,3 +435,437 @@ SELECT count(*) FROM pg_stat_activity WHERE datname = 'performancelab';
 ```
 
 Connections capping at 15 while latency climbs = pool contention (not the threadpool).
+
+---
+
+## Português (PT-BR)
+
+Testes unitários usam **pytest** com um banco SQLite em memória para testes de serviço, e Pydantic puro para testes de schema (nenhum banco externo é necessário).
+
+Testes de integração usam o **FastAPI TestClient** (`httpx2`) com o mesmo SQLite em memória para validar a camada HTTP (códigos de status, formatos de resposta, propagação de erros).
+
+### Estrutura
+
+```
+tests/
+├── integration/         # Testes de integração dos routers (camada HTTP via TestClient)
+│   ├── conftest.py      # Rótulos/fixtures do TestClient + override do get_db
+│   ├── test_users_api.py
+│   ├── test_rooms_api.py
+│   └── test_reservations_api.py
+├── performance/         # Testes de carga k6 (não pytest) - veja "Testes de Performance & Carga"
+│   ├── helpers/
+│   │   ├── helpers.js         # helper compartilhado randomIntBetween
+│   │   ├── delete_helpers.js  # resolveSeedKey, parseDuration, computePoolConfig
+│   │   └── scenarios.js       # perfils compartilhados smoke/load/staircase/soak/spike
+│   └── load/
+│       ├── users/             # um script k6 por operação HTTP
+│       ├── rooms/
+│       └── reservations/
+└── unit/                # Testes unitários (service/schema/model/config)
+    ├── conftest.py      # Fixtures compartilhadas (engine, db_session, user, room, etc.)
+    ├── config/          # Testes do módulo de configuração (env simulado, sem DB)
+    │   └── test_config.py
+    ├── models/          # Testes de modelos ORM (exigem DB)
+    │   └── test_models.py
+    ├── schemas/         # Testes de validação de schema (sem DB, Pydantic puro)
+    │   ├── test_user_schemas.py
+    │   ├── test_room_schemas.py
+    │   └── test_reservation_schemas.py
+    ├── services/        # Testes da camada de serviços (exigem DB)
+    │   ├── test_user_service.py
+    │   ├── test_room_service.py
+    │   └── test_reservation_service.py
+```
+
+### Como executar
+
+```bash
+# Executar todos os testes (unitários + integração)
+uv run pytest tests/ -v
+
+# Executar apenas os testes unitários
+uv run pytest tests/unit -v
+
+# Executar apenas os testes de integração
+uv run pytest tests/integration -v
+
+# Executar apenas os testes de serviço
+uv run pytest tests/unit/services -v
+
+# Executar apenas os testes de schema
+uv run pytest tests/unit/schemas -v
+
+# Executar apenas os testes de configuração
+uv run pytest tests/unit/config -v
+
+# Executar apenas os testes de modelos
+uv run pytest tests/unit/models -v
+
+# Executar um arquivo específico
+uv run pytest tests/unit/services/test_user_service.py -v
+
+# Executar testes que correspondem a uma palavra-chave
+uv run pytest tests/unit -k "overlap" -v
+```
+
+### Fixtures (`conftest.py`)
+
+Fixtures compartilhadas descobertas automaticamente pelo pytest (disponíveis em todos os subdiretórios):
+
+| Fixture          | Descrição                                             |
+| ---------------- | ----------------------------------------------------- |
+| `engine`         | Engine SQLite em memória                              |
+| `db_session`     | Sessão com escopo por teste, com rollback após uso    |
+| `user`           | Usuário pré-criado (Alice)                            |
+| `second_user`    | Segundo usuário pré-criado (Bob)                      |
+| `room`           | Sala pré-criada (101, 2 hóspedes)                     |
+| `second_room`    | Segunda sala pré-criada (102, 4 hóspedes)             |
+
+> Os testes de integração (`tests/integration/conftest.py`) fornecem uma fixture `client` (TestClient do FastAPI envolvendo uma nova instância do app) além das mesmas fixtures `user`, `second_user`, `room` e `second_room`.
+
+### Testes de Serviço (`services/`)
+
+### `services/test_user_service.py`
+
+| Classe                | Teste                                         | O que verifica                                 |
+| --------------------- | --------------------------------------------- | ---------------------------------------------- |
+| **TestCreateUser**    | `test_create_user_success`                    | Criar usuário define id, nome e e-mail          |
+|                       | `test_create_user_with_phone`                 | Telefone é armazenado quando informado          |
+|                       | `test_create_user_duplicate_email`            | E-mail duplicado retorna 409                    |
+| **TestGetUser**       | `test_get_user_success`                       | Buscar usuário existente funciona               |
+|                       | `test_get_user_not_found`                     | Usuário inexistente retorna 404                 |
+| **TestListUsers**     | `test_list_users_empty`                       | Sem usuários retorna lista vazia                |
+|                       | `test_list_users_returns_all`                 | Múltiplos usuários todos retornados             |
+|                       | `test_list_users_paginated`                   | Paginação skip/limit funciona                   |
+| **TestUpdateUser**    | `test_update_user_name`                       | Nome pode ser atualizado isoladamente           |
+|                       | `test_update_user_email`                      | E-mail pode ser atualizado isoladamente         |
+|                       | `test_update_user_not_found`                  | Atualizar usuário inexistente retorna 404       |
+|                       | `test_update_user_duplicate_email`            | Atualizar para e-mail existente retorna 409     |
+| **TestDeleteUser**    | `test_delete_user_success`                    | Usuário é removido (get retorna 404)            |
+|                       | `test_delete_user_not_found`                  | Excluir usuário inexistente retorna 404         |
+|                       | `test_delete_user_with_active_reservations`   | Excluir usuário com reservas ativas retorna 409 |
+
+### `services/test_room_service.py`
+
+| Classe                | Teste                                                | O que verifica                                           |
+| --------------------- | ----------------------------------------------------- | -------------------------------------------------------- |
+| **TestCreateRoom**    | `test_create_room_success`                            | Criar sala define id, padrão `is_active=True`            |
+|                       | `test_create_room_with_description`                   | Descrição é armazenada quando informada                  |
+|                       | `test_create_room_duplicate_name`                     | Nome de sala duplicado retorna 409                       |
+| **TestGetRoom**       | `test_get_room_success`                               | Buscar sala existente funciona                           |
+|                       | `test_get_room_not_found`                             | Sala inexistente retorna 404                             |
+| **TestListRooms**     | `test_list_rooms_empty`                               | Sem salas retorna lista vazia                            |
+|                       | `test_list_rooms_basic`                               | Múltiplas salas ativas todas retornadas                  |
+|                       | `test_list_rooms_excludes_inactive`                   | Salas com soft-delete ocultas por padrão                 |
+|                       | `test_list_rooms_includes_inactive_when_requested`    | Definir `active_only=False` retorna todas as salas       |
+| **TestUpdateRoom**    | `test_update_room_capacity`                           | Capacidade pode ser atualizada                          |
+|                       | `test_update_room_name`                               | Nome pode ser atualizado                                 |
+|                       | `test_update_room_not_found`                          | Atualizar sala inexistente retorna 404                   |
+|                       | `test_update_room_duplicate_name`                     | Atualizar para nome existente retorna 409                |
+| **TestDeleteRoom**    | `test_delete_room_soft_delete`                        | Desativação é um soft-delete (`is_active=False`)         |
+|                       | `test_delete_room_not_found`                          | Excluir sala inexistente retorna 404                     |
+|                       | `test_delete_room_with_active_reservations`           | Excluir sala com reservas ativas retorna 409             |
+
+### `services/test_reservation_service.py`
+
+| Classe                        | Teste                                              | O que verifica                                        |
+| ----------------------------- | -------------------------------------------------- | ----------------------------------------------------- |
+| **TestCreateReservation**     | `test_create_reservation_success`                  | Reserva é criada com status CONFIRMED                  |
+|                               | `test_create_reservation_user_not_found`           | Usuário inexistente retorna 404                        |
+|                               | `test_create_reservation_room_not_found`           | Sala inexistente retorna 404                           |
+|                               | `test_create_reservation_room_inactive`            | Sala inativa retorna 404                               |
+|                               | `test_create_overlap_inside`                        | Datas sobrepostas (dentro) bloqueadas com 409          |
+|                               | `test_create_overlap_start_before`                  | Datas sobrepostas (início antes) bloqueadas            |
+|                               | `test_create_overlap_ends_after`                    | Datas sobrepostas (fim depois) bloqueadas              |
+|                               | `test_create_overlap_contains`                      | Datas sobrepostas (contém) bloqueadas                  |
+|                               | `test_create_no_overlap_adjacent`                   | Check-out/check-in adjacentes permitidos               |
+|                               | `test_create_no_overlap_separate`                   | Datas sem sobreposição permitidas                      |
+|                               | `test_create_different_rooms_no_conflict`           | Mesmas datas, salas diferentes permitidas              |
+| **TestCancelReservation**     | `test_cancel_confirmed_reservation`                 | Reserva confirmada cancelada (status CANCELLED)        |
+|                               | `test_cancel_already_cancelled`                     | Cancelar duas vezes retorna 400                        |
+|                               | `test_cancel_completed`                             | Cancelar reserva concluída retorna 400                 |
+|                               | `test_cancel_not_found`                             | Reserva inexistente retorna 404                        |
+| **TestListUserReservations**  | `test_list_user_reservations`                       | Todas as reservas de um usuário retornadas             |
+|                               | `test_list_user_reservations_empty`                 | Usuário sem reservas retorna lista vazia               |
+|                               | `test_list_user_reservations_user_not_found`        | Usuário inexistente retorna 404                        |
+| **TestListRoomReservations**  | `test_list_room_reservations`                       | Todas as reservas de uma sala retornadas               |
+|                               | `test_list_room_reservations_empty`                 | Sala sem reservas retorna lista vazia                  |
+|                               | `test_list_room_reservations_room_inactive`         | Sala inativa retorna 404                               |
+
+## Testes de Integração (`integration/`)
+
+Testes da camada HTTP usando o TestClient do FastAPI. Cada teste verifica códigos de status, formatos de resposta e serialização em fluxos felizes. Regras de negócio, casos de borda e caminhos de erro são cobertos pelos testes unitários.
+
+### `integration/test_users_api.py`
+
+| Classe                | Teste                         | O que verifica                         |
+| --------------------- | ----------------------------- | -------------------------------------- |
+| **TestCreateUser**    | `test_create_user`            | POST /users/ retorna 201 com corpo completo |
+| **TestGetUser**       | `test_get_user`               | GET /users/{id} retorna 200            |
+| **TestListUsers**     | `test_list_users_paginated`   | GET /users/ com params skip/limit      |
+| **TestUpdateUser**    | `test_update_user`            | PUT /users/{id} atualização parcial retorna 200 |
+| **TestDeleteUser**    | `test_delete_user`            | DELETE /users/{id} retorna 204, GET confirma a exclusão |
+
+### `integration/test_rooms_api.py`
+
+| Classe                | Teste                            | O que verifica                         |
+| --------------------- | -------------------------------- | -------------------------------------- |
+| **TestCreateRoom**    | `test_create_room`               | POST /rooms/ retorna 201 com corpo completo |
+| **TestGetRoom**       | `test_get_room`                  | GET /rooms/{id} retorna 200            |
+| **TestListRooms**     | `test_list_rooms_returns_all`    | GET /rooms/ retorna todas as salas     |
+|                       | `test_list_rooms_paginated`      | GET /rooms/ com params skip/limit      |
+| **TestUpdateRoom**    | `test_update_room`               | PUT /rooms/{id} atualização parcial retorna 200 |
+| **TestDeleteRoom**    | `test_delete_room`               | DELETE /rooms/{id} retorna 204         |
+
+### `integration/test_reservations_api.py`
+
+| Classe                         | Teste                            | O que verifica                                  |
+| ------------------------------ | -------------------------------- | ----------------------------------------------- |
+| **TestCreateReservation**      | `test_create_reservation`        | POST /reservations/ retorna 201 com corpo completo |
+| **TestCancelReservation**      | `test_cancel_reservation`        | PATCH /reservations/{id}/cancel com 200 + status |
+| **TestListUserReservations**   | `test_list_user_reservations`    | GET /reservations/user/{id} retorna todas  |
+| **TestListRoomReservations**   | `test_list_room_reservations`    | GET /reservations/room/{id} retorna todas  |
+
+## Testes de Schema (`schemas/`)
+
+Testes puros de validação — nenhum banco de dados é necessário. Cada classe valida os validadores de campo do Pydantic.
+
+### `schemas/test_user_schemas.py`
+
+| Classe                | Teste                                        | O que verifica                                    |
+| --------------------- | -------------------------------------------- | ------------------------------------------------- |
+| **TestUserCreate**    | `test_valid_minimal`                         | Nome e e-mail aceitos, telefone padrão None        |
+|                       | `test_valid_with_phone`                      | Telefone com caracteres especiais (+55) aceito     |
+|                       | `test_valid_phone_simple_digits`             | Telefone apenas com dígitos aceito                 |
+|                       | `test_trailing_whitespace_stripped`          | Espaços em branco do nome removidos na criação      |
+|                       | `test_name_empty_raises`                     | Nome vazio gera ValidationError                    |
+|                       | `test_name_whitespace_only_raises`           | Nome só com espaços gera ValidationError           |
+|                       | `test_name_too_long_raises`                  | Nome > 100 caracteres gera ValidationError         |
+|                       | `test_name_max_length_allowed`               | Nome com 100 caracteres aceito                     |
+|                       | `test_phone_invalid_format_raises`           | Telefone com letras gera ValidationError           |
+|                       | `test_phone_too_short_raises`                | Telefone < 7 caracteres gera ValidationError       |
+|                       | `test_phone_too_long_raises`                 | Telefone > 20 caracteres gera ValidationError      |
+|                       | `test_phone_none_allowed`                    | Telefone None explícito aceito                     |
+| **TestUserUpdate**    | `test_valid_partial_name`                    | Apenas o nome atualizado, demais campos None       |
+|                       | `test_valid_partial_email`                   | Apenas o e-mail atualizado                         |
+|                       | `test_valid_partial_phone`                   | Apenas o telefone atualizado                       |
+|                       | `test_valid_all_fields`                      | Todos os campos opcionais informados de uma vez    |
+|                       | `test_name_trailing_whitespace_stripped`     | Espaços do nome removidos na atualização           |
+|                       | `test_name_empty_raises`                     | Nome vazio na atualização gera erro                |
+|                       | `test_name_too_long_raises`                  | Nome > 100 caracteres na atualização gera erro     |
+|                       | `test_phone_too_short_raises`                | Telefone < 7 caracteres na atualização gera erro   |
+
+### `schemas/test_room_schemas.py`
+
+| Classe                | Teste                                        | O que verifica                                    |
+| --------------------- | -------------------------------------------- | ------------------------------------------------- |
+| **TestRoomCreate**    | `test_valid_minimal`                         | Nome, capacidade, preço aceitos; descrição None    |
+|                       | `test_valid_with_description`                | Descrição armazenada quando informada              |
+|                       | `test_trailing_whitespace_stripped`          | Espaços do nome removidos                          |
+|                       | `test_name_empty_raises`                     | Nome vazio gera ValidationError                    |
+|                       | `test_name_whitespace_only_raises`           | Nome só com espaços gera erro                      |
+|                       | `test_name_too_long_raises`                  | Nome > 50 caracteres gera erro                     |
+|                       | `test_name_max_length_allowed`               | Nome com 50 caracteres aceito                      |
+|                       | `test_capacity_zero_raises`                  | Capacidade = 0 gera erro                           |
+|                       | `test_capacity_negative_raises`              | Capacidade = -1 gera erro                          |
+|                       | `test_price_zero_raises`                     | Preço = 0 gera erro                                |
+|                       | `test_price_negative_raises`                 | Preço = -1 gera erro                               |
+|                       | `test_description_too_long_raises`           | Descrição > 500 caracteres gera erro               |
+|                       | `test_description_max_length_allowed`        | Descrição com 500 caracteres aceita                |
+| **TestRoomUpdate**    | `test_valid_partial_name`                    | Apenas o nome atualizado                           |
+|                       | `test_valid_partial_capacity`                | Apenas a capacidade atualizada                     |
+|                       | `test_valid_partial_price`                   | Apenas o preço atualizado                          |
+|                       | `test_valid_all_fields`                      | Todos os campos opcionais de uma vez               |
+|                       | `test_name_empty_raises`                     | Nome vazio na atualização gera erro                |
+|                       | `test_name_too_long_raises`                  | Nome > 50 caracteres na atualização gera erro      |
+|                       | `test_capacity_zero_raises`                  | Capacidade = 0 na atualização gera erro            |
+|                       | `test_capacity_negative_raises`              | Capacidade = -1 na atualização gera erro           |
+|                       | `test_price_zero_raises`                     | Preço = 0 na atualização gera erro                 |
+|                       | `test_price_negative_raises`                 | Preço = -1 na atualização gera erro                |
+|                       | `test_description_too_long_raises`           | Descrição > 500 caracteres na atualização gera erro |
+
+### `schemas/test_reservation_schemas.py`
+
+| Classe                        | Teste                          | O que verifica                                |
+| ----------------------------- | ------------------------------ | --------------------------------------------- |
+| **TestReservationCreate**     | `test_valid`                   | check_in/check_out válidos aceitos             |
+|                               | `test_check_in_today_allowed`  | check_in hoje é aceito                         |
+|                               | `test_check_in_past_raises`    | check_in anterior a hoje gera ValidationError  |
+|                               | `test_check_out_equal_check_in_raises` | check_out == check_in gera erro    |
+|                               | `test_check_out_before_check_in_raises` | check_out anterior a check_in gera erro |
+
+## Testes de Config (`config/`)
+
+Testes do módulo de configuração — usam `unittest.mock.patch` para controlar variáveis de ambiente sem um arquivo `.env`. Nenhum banco de dados é necessário.
+
+### `config/test_config.py`
+
+| Classe           | Teste                     | O que verifica                                         |
+| ---------------- | ------------------------- | ------------------------------------------------------ |
+| **TestConfig**   | `test_defaults`           | Todas as constantes caem para padrões esperados        |
+|                  | `test_custom_values`      | Env vars sobrescrevem todos os padrões (DB_PORT como int) |
+|                  | `test_partial_override`   | Uma env var isolada mantém as demais no padrão         |
+|                  | `test_port_is_int`        | DB_PORT é convertido para int                          |
+|                  | `test_dotenv_loaded`      | load_dotenv chamado com caminho e override corretos    |
+
+## Testes de Modelos (`models/`)
+
+Testes de modelos ORM — validam padrões, restrições, cascatas e valores de enum. Exigem um banco SQLite em memória (fixture compartilhada `db_session`).
+
+### `models/test_models.py`
+
+| Classe                      | Teste                                        | O que verifica                                    |
+| --------------------------- | -------------------------------------------- | ------------------------------------------------- |
+| **TestReservationStatus**   | `test_enum_values`                           | Membros do enum têm valores corretos              |
+|                             | `test_is_str_enum`                           | ReservationStatus é subclasse de str              |
+|                             | `test_all_members_covered`                   | Os 3 membros esperados estão presentes            |
+| **TestRoomDefaults**        | `test_is_active_defaults_to_true`            | Padrão do Room.is_active no nível ORM             |
+| **TestReservationDefaults** | `test_status_defaults_to_confirmed`          | Padrão do Reservation.status = CONFIRMED          |
+| **TestUserUniqueEmail**     | `test_duplicate_email_raises`                | IntegrityError no nível DB para e-mail duplicado  |
+| **TestRoomUniqueName**      | `test_duplicate_name_raises`                 | IntegrityError no nível DB para nome de sala duplicado |
+| **TestUserCascadeDelete**   | `test_delete_user_cascades_to_reservations`  | Excluir usuário em cascata exclui reservas        |
+| **TestRoomCascadeDelete**   | `test_delete_room_cascades_to_reservations`  | Excluir sala em cascata exclui reservas           |
+
+## Testes de Performance & Carga (`performance/load/`)
+
+Os testes de carga são scripts **k6** (não pytest). Eles apontam para um servidor em execução e foram criados para explorar os limites de concorrência do app — especificamente o pool de conexões do SQLAlchemy (`pool_size=5`, `max_overflow=10`, ou seja, 15 conexões) atrás do pool de 40 threads do anyio usado em endpoints síncronos (veja README "Limitações conhecidas").
+
+### Como executar
+
+Requer [k6](https://k6.io/docs/getting-started/installation/) instalado (não é uma dependência Python). O servidor deve estar em execução primeiro (ex.: `uv run uvicorn api.main:app`).
+
+```bash
+# Perfil padrão (load)
+k6 run tests/performance/load/users/get_users.js
+
+# Obter um usuário por id (id derivado do último dígito de __VU, 0 -> 10)
+k6 run tests/performance/load/users/get_user_by_id.js
+
+# Atualizar um usuário por id (id derivado do último dígito de __VU, 0 -> 10)
+k6 run tests/performance/load/users/put_user_by_id.js
+
+# Excluir usuários de um pool criado via rota /seed/users no setup()
+k6 run tests/performance/load/users/delete_user.js
+
+# Sobrescrever o tamanho do pool de exclusão (caso contrário, calculado pelo perfil)
+k6 run tests/performance/load/users/delete_user.js -e K6_DELETE_POOL_SIZE=5000
+
+# Escolher um perfil e um alvo
+k6 run tests/performance/load/users/post_users.js \
+  -e K6_SCENARIO=staircase \
+  -e BASE_URL=http://localhost:8000
+
+# Soak com duração personalizada
+k6 run tests/performance/load/users/get_users.js -e K6_SCENARIO=soak -e K6_SOAK_DURATION=15m
+
+# Exportar resultados para análise
+k6 run tests/performance/load/users/get_users.js --out json=results.json
+```
+
+Salas espelham cada contraparte de `users` com uma pasta `rooms/`:
+
+```bash
+# Criar salas (o nome inclui RUN_ID para permanecer único)
+k6 run tests/performance/load/rooms/post_rooms.js
+
+# Listar salas (faz seed de 1 sala no setup() se a lista estiver vazia)
+k6 run tests/performance/load/rooms/get_rooms.js
+
+# Obter uma sala por id (id derivado do último dígito de __VU, 0 -> 10)
+k6 run tests/performance/load/rooms/get_room_by_id.js
+
+# Atualizar uma sala por id (id derivado do último dígito de __VU, 0 -> 10)
+k6 run tests/performance/load/rooms/put_room_by_id.js
+
+# Excluir salas (faz seed de um pool de soft-delete via POST /seed/rooms no setup())
+k6 run tests/performance/load/rooms/delete_room.js
+```
+
+Reservas ficam em `tests/performance/load/reservations/`:
+
+```bash
+# Criar reservas (janelas de datas futuras únicas por iteração para evitar 409)
+k6 run tests/performance/load/reservations/post_reservations.js
+
+# Listar reservas de um usuário (faz seed de ≥10 usuários + 1 reserva cada no setup())
+k6 run tests/performance/load/reservations/get_user_reservations.js
+
+# Listar reservas de uma sala (faz seed de ≥10 salas + 1 reserva cada no setup())
+k6 run tests/performance/load/reservations/get_room_reservations.js
+
+# Cancelar reservas de um pool criado via POST /seed/reservations no setup()
+k6 run tests/performance/load/reservations/cancel_reservation.js
+```
+
+Os scripts compartilham o helper `randomIntBetween` de `tests/performance/load/helpers.js`; os testes de exclusão/cancelamento usam adicionalmente `tests/performance/load/delete_helpers.js` (`resolveSeedKey`, `parseDuration`, `computePoolConfig`). Todos os perfis estão centralizados em `tests/performance/helpers/scenarios.js` para que cada teste de rota execute formas de carga idênticas.
+
+### Perfis
+
+| Perfil      | Executor      | Carga (VUs)                      | Objetivo                                   |
+| ----------- | ------------- | -------------------------------- | ------------------------------------------ |
+| `smoke`     | constant-vus  | 3, 30s                           | Verificação rápida de que o script funciona |
+| `load`      | ramping-vus   | ramp até 5, mantém 30, ramp a 0  | Linha de base sob carga típica             |
+| `staircase` | ramping-vus   | 5,10,15,20,25,30,40,50 (45s cda) | Encontrar o "knee" de concorrência         |
+| `soak`      | ramping-vus   | ramp até 40, mantém 10m (padrão) | Detectar crescimento/ vazamentos de conexão |
+| `spike`     | ramping-vus   | 0 → 200 (15s), mantém 200 (1m)  | Expor exaustão do pool de forma acentuada  |
+
+Selecione com `-e K6_SCENARIO=<nome>`. O perfil `staircase` mantém cada etapa ~45s para que as métricas de percentil fiquem estáveis.
+
+Use `-e K6_SCENARIO=all` para executar todos os perfis de uma vez (os cinco rodam em paralelo). Isso é um escape para uma execução combinada única: como `spike` deliberadamente sobrecarrega o pool de 15 conexões, uma execução `all` reportará violações de limiar (os thresholds usam `abortOnFail: false`, então são registrados, não abortados). Testes de exclusão/cancelamento dimensionam seu pool de seed a partir da concorrência somada de todos os perfis ativos.
+
+### Pool de seed do teste de exclusão — usuários
+
+`delete_user.js` usa os mesmos cenários. Como `DELETE /users/{id}` remove linhas permanentemente, o `setup()` chama a rota dedicada **`POST /seed/users`** (não o `POST /users` de negócio) com uma quantidade derivada do cenário, para que o pool nunca se esgote no meio da execução (apenas a rota sob teste é atingida durante a carga):
+
+`quantity = maxVUs * (totalSeconds / AVG_ITER_SECONDS) * 1.2`, onde `AVG_ITER_SECONDS = 1.0` (o sleep é 500–1500ms, então iterações reais são um pouco mais lentas — superdimensionar é a direção segura). A rota insere os usuários em massa diretamente no Postgres e retorna seus ids; cada VU recebe uma fatia disjunta (`floor(poolSize / maxVUs)`) para que dois VUs não atinjam o mesmo id (sem corridas de 404). Sobrescreva com `-e K6_DELETE_POOL_SIZE=<n>`. Espere grandes contagens de seed em `soak`/`staircase` (ex.: ~7,9k em `load`, ~22k em `staircase`, ~33k em `soak`).
+
+`setupTimeout` é definido como `10m` (o padrão é 60s) para que o seed de grandes pools não aborte antes de os VUs iniciarem.
+
+A rota de seed é autenticada: as requisições devem enviar o header `X-Seed-Key` correspondente a `SEED_API_KEY` do `.env` do projeto. O k6 lê a chave de `../../../../.env` (relativo ao script em `users/`) automaticamente, ou você pode sobrescrever com `-e SEED_API_KEY=<valor>`.
+
+As rotas de carga são registradas apenas quando `ENABLE_LOADTEST_ENDPOINTS=true` no `.env` (padrão desligado/falso quando não definido), então nunca são expostas a menos que explicitamente habilitadas.
+
+### Pool de seed do teste de exclusão — salas
+
+`delete_room.js` usa os mesmos cenários que `delete_user.js`. O `setup()` chama a rota dedicada **`POST /seed/rooms`** (não o `POST /rooms` de negócio) com a mesma fórmula de pool (`quantity = maxVUs * (totalSeconds / AVG_ITER_SECONDS) * 1.2`), inserindo as salas em massa diretamente no Postgres e retornando seus ids. Cada VU recebe uma fatia disjunta (`floor(poolSize / maxVUs)`) para que dois VUs não atinjam o mesmo id.
+
+Como `DELETE /rooms/{id}` é um **soft-delete** (define `is_active=false`, a linha permanece e re-exclusões ainda retornam 204), o pool nunca retorna 404, mesmo que um id seja excluído duas vezes. `setupTimeout` é `10m`. Sobrescreva o pool com `-e K6_DELETE_POOL_SIZE=<n>`. A rota `/seed/rooms` é autenticada com o header `X-Seed-Key`, lido de `../../../../.env` (relativo ao script em `rooms/`) ou sobrescrevível com `-e SEED_API_KEY=<valor>`, e só é registrada quando `ENABLE_LOADTEST_ENDPOINTS=true`.
+
+### Pool de seed do teste de cancelamento — reservas
+
+`cancel_reservation.js` usa os mesmos cenários. Como `PATCH /reservations/{id}/cancel` funciona apenas uma vez por reserva (uma segunda chamada retorna **400**), o `setup()` chama a rota dedicada **`POST /seed/reservations`** com uma quantidade da mesma fórmula de pool dos testes de exclusão (`quantity = maxVUs * (totalSeconds / AVG_ITER_SECONDS) * 1.2`). Cada VU recebe uma fatia disjunta (`floor(poolSize / maxVUs)`) para que dois VUs não cancelem o mesmo id. Sobrescreva com `-e K6_DELETE_POOL_SIZE=<n>`. `setupTimeout` é `10m`.
+
+`POST /seed/reservations` é autenticado com `X-Seed-Key` (lido de `../../../../.env` ou `-e SEED_API_KEY=<valor>`) e só é registrado quando `ENABLE_LOADTEST_ENDPOINTS=true`. O seed gera seus próprios pools de usuários + salas (100 cada) além de `quantity` reservas **confirmadas** com datas sem sobreposição por sala, então nunca viola a restrição de exclusão `no_overlap` (reservas confirmadas na mesma sala não podem ter intervalos de datas sobrepostos — veja a nota sobre schema abaixo).
+
+### Teste de criação de reservas — evitando colisões 409
+
+`POST /reservations/` é protegido pela restrição de exclusão `no_overlap`: duas reservas confirmadas na mesma sala com datas sobrepostas entram em conflito (a rota retorna **409** tanto pela query de sobreposição quanto por um `IntegrityError`). Como respostas 4xx reprovam o limiar `http_req_failed < 1%`, o `post_reservations.js` grava cada iteração com uma **janela de datas globalmente única** para nunca sobrepor: `offset = __ITER * maxVus + (__VU - 1)`, `check_in = hoje + offset`, `check_out = check_in + 1`. Cada POST, portanto, retorna `201`. O `setup()` faz seed de um único usuário + sala ativos (via `POST /users`/`POST /rooms` de negócio ou reutiliza linhas existentes).
+
+### Thresholds
+
+Todos os três limiares usam `abortOnFail: false` para que o teste **registre** a saturação em vez de parar nela:
+
+- `http_req_failed`: `rate < 0.01`
+- `http_req_duration`: `p(95) < 500`
+- `http_req_waiting`: `p(95) < 500` — time-to-first-byte, a métrica que expõe o enfileiramento no pool do DB
+
+### Como ler o "knee"
+
+Quando a concorrência excede a capacidade do pool/threadpool, as requisições se enfileiram dentro do app antes de atingir o banco. Sintomas:
+
+1. O `http_req_waiting` (TTFB) p95 rompe o limiar de 500ms enquanto o `http_req_blocked` permanece perto de 0 (keep-alive; a espera é no servidor, não na rede).
+2. A vazão (`http_reqs`/RPS) atinge um platô mesmo com VUs aumentando.
+3. No extremo, requisições excedem `pool_timeout` (padrão 30s) e retornam 500; o log do console mostra `TimeoutError` / `OperationalError` no corpo da resposta — a assinatura de exaustão do pool.
+
+Knee esperado: em algum ponto da faixa de 15–40 VUs para este app (pool = 15 conexões, threadpool = 40).
+
+### Correlacionando com o DB (opcional)
+
+O k6 mostra o sintoma; confirme a causa durante uma execução consultando o Postgres:
+
+```sql
+SELECT count(*) FROM pg_stat_activity WHERE datname = 'performancelab';
+```
+
+Conexões limitadas a 15 enquanto a latência aumenta = contenção no pool (não no threadpool).
