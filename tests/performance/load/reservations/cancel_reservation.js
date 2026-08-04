@@ -2,62 +2,15 @@ import http from 'k6/http';
 import { check, sleep } from 'k6';
 import { randomIntBetween } from '../../helpers/helpers.js';
 import { computePoolConfig, resolveSeedKey } from '../../helpers/delete_helpers.js';
+import { activeProfiles, optionsScenarios, resolveScenarioName } from '../../helpers/scenarios.js';
 
 const BASE_URL = __ENV.BASE_URL || 'http://localhost:8000';
-const SCENARIO = __ENV.K6_SCENARIO || 'load';
-const SOAK_DURATION = __ENV.K6_SOAK_DURATION || '10m';
+const SCENARIO = resolveScenarioName();
 
 const SEED_API_KEY = resolveSeedKey();
 
-const scenarios = {
-  smoke: {
-    executor: 'constant-vus',
-    vus: 3,
-    duration: '30s',
-  },
-  load: {
-    executor: 'ramping-vus',
-    startVUs: 0,
-    stages: [
-      { duration: '30s', target: 5 },
-      { duration: '1m', target: 30 },
-      { duration: '2m', target: 30 },
-      { duration: '10s', target: 0 },
-    ],
-    gracefulRampDown: '30s',
-  },
-  staircase: {
-    executor: 'ramping-vus',
-    startVUs: 0,
-    stages: [
-      { duration: '30s', target: 5 },
-      { duration: '45s', target: 10 },
-      { duration: '45s', target: 15 },
-      { duration: '45s', target: 20 },
-      { duration: '45s', target: 25 },
-      { duration: '45s', target: 30 },
-      { duration: '45s', target: 40 },
-      { duration: '45s', target: 50 },
-      { duration: '30s', target: 0 },
-    ],
-    gracefulRampDown: '30s',
-  },
-  soak: {
-    executor: 'ramping-vus',
-    startVUs: 0,
-    stages: [
-      { duration: '1m', target: 40 },
-      { duration: SOAK_DURATION, target: 40 },
-      { duration: '30s', target: 0 },
-    ],
-    gracefulRampDown: '30s',
-  },
-};
-
 export const options = {
-  scenarios: {
-    [SCENARIO]: scenarios[SCENARIO],
-  },
+  scenarios: optionsScenarios(SCENARIO),
   setupTimeout: '10m',
   thresholds: {
     http_req_failed: [{ threshold: 'rate<0.01', abortOnFail: false }],
@@ -67,7 +20,7 @@ export const options = {
 };
 
 export function setup() {
-  const { poolSize, maxVus } = computePoolConfig(scenarios[SCENARIO]);
+  const { poolSize, maxVus } = computePoolConfig(activeProfiles(SCENARIO));
 
   const res = http.post(
     `${BASE_URL}/seed/reservations`,

@@ -349,18 +349,21 @@ k6 run tests/performance/load/reservations/get_room_reservations.js
 k6 run tests/performance/load/reservations/cancel_reservation.js
 ```
 
-The scripts share the `randomIntBetween` helper from `tests/performance/load/helpers.js`; the delete/cancel tests additionally use `tests/performance/load/delete_helpers.js` (`resolveSeedKey`, `parseDuration`, `computePoolConfig`).
+The scripts share the `randomIntBetween` helper from `tests/performance/load/helpers.js`; the delete/cancel tests additionally use `tests/performance/load/delete_helpers.js` (`resolveSeedKey`, `parseDuration`, `computePoolConfig`). All profiles are centralized in `tests/performance/helpers/scenarios.js` so every route test runs identical load shapes.
 
 ### Profiles
 
 | Profile     | Executor      | Load (VUs)                     | Purpose                                 |
 | ----------- | ------------- | ------------------------------ | --------------------------------------- |
 | `smoke`     | constant-vus  | 3, 30s                         | Sanity check that the script works      |
-| `load`      | ramping-vus   | ramp to 25, hold, ramp to 50   | Baseline under typical load             |
+| `load`      | ramping-vus   | ramp to 5, hold 30, ramp to 0   | Baseline under typical load             |
 | `staircase` | ramping-vus   | 5,10,15,20,25,30,40,50 (45s ea)| Find the concurrency knee               |
 | `soak`      | ramping-vus   | ramp to 40, hold 10m (default) | Detect connection growth / leaks        |
+| `spike`     | ramping-vus   | 0 → 200 (15s), hold 200 (1m)   | Expose pool exhaustion sharply          |
 
 Select with `-e K6_SCENARIO=<name>`. The `staircase` profile holds each step ~45s so percentile metrics are stable.
+
+Use `-e K6_SCENARIO=all` to run every profile at once (all five run in parallel). This is an escape hatch for a single combined run: because `spike` deliberately overwhelms the 15-connection pool, an `all` run will report threshold breaches (thresholds use `abortOnFail: false`, so they are recorded, not aborted). Destructive/cancel tests size their seed pool from the summed concurrency of all active profiles.
 
 ### Delete-test seed pool — users
 

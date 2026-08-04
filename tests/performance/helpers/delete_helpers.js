@@ -27,17 +27,26 @@ export function parseDuration(duration) {
   return value * 3600;
 }
 
-export function computePoolConfig(scenario) {
+export function computePoolConfig(scenariosOrArray) {
+  const profileList = Array.isArray(scenariosOrArray)
+    ? scenariosOrArray
+    : [scenariosOrArray];
+
   let maxVus = 0;
   let totalSeconds = 0;
 
-  if (scenario.executor === 'constant-vus') {
-    maxVus = scenario.vus;
-    totalSeconds = parseDuration(scenario.duration);
-  } else if (scenario.executor === 'ramping-vus') {
-    maxVus = Math.max(scenario.startVUs, ...scenario.stages.map((s) => s.target));
-    for (const stage of scenario.stages) {
-      totalSeconds += parseDuration(stage.duration);
+  for (const scenario of profileList) {
+    if (scenario.executor === 'constant-vus') {
+      maxVus += scenario.vus;
+      totalSeconds += parseDuration(scenario.duration);
+    } else if (scenario.executor === 'ramping-vus') {
+      maxVus += Math.max(
+        scenario.startVUs,
+        ...scenario.stages.map((s) => s.target),
+      );
+      for (const stage of scenario.stages) {
+        totalSeconds += parseDuration(stage.duration);
+      }
     }
   }
 
