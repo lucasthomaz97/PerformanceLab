@@ -4,11 +4,14 @@ from sqlalchemy.orm import Session
 from api.config import SEED_API_KEY
 from api.database import get_db
 from api.schemas.seed import (
+    SeedReservationsRequest,
+    SeedReservationsResponse,
     SeedRoomsRequest,
     SeedRoomsResponse,
     SeedUsersRequest,
     SeedUsersResponse,
 )
+from api.services.reservation_service import ReservationService
 from api.services.room_service import RoomService
 from api.services.user_service import UserService
 
@@ -43,3 +46,14 @@ def seed_users(data: SeedUsersRequest, db: Session = Depends(get_db)):
 def seed_rooms(data: SeedRoomsRequest, db: Session = Depends(get_db)):
     ids = RoomService.seed(db, data.quantity)
     return SeedRoomsResponse(ids=ids, count=len(ids))
+
+
+@router.post(
+    "/reservations",
+    response_model=SeedReservationsResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(verify_seed_key)],
+)
+def seed_reservations(data: SeedReservationsRequest, db: Session = Depends(get_db)):
+    ids = ReservationService.seed(db, data.quantity)
+    return SeedReservationsResponse(ids=ids, count=len(ids))

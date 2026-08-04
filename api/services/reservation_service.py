@@ -1,4 +1,8 @@
+import datetime
+import time
+
 from fastapi import HTTPException, status
+from sqlalchemy import insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -85,6 +89,71 @@ class ReservationService:
         db.commit()
         db.refresh(reservation)
         return reservation
+
+    @staticmethod
+    def seed(db: Session, quantity: int) -> list[int]:
+        run_id = time.time_ns()
+        pool_size = 100
+
+        user_names = [f"Seed Res User {run_id}-{i}" for i in range(pool_size)]
+        emails = [f"seed-res-{run_id}-{i}@example.com" for i in range(pool_size)]
+        room_names = [f"Seed Res Room {run_id}-{i}" for i in range(pool_size)]
+
+        db.execute(
+            insert(User),
+            [{"name": user_names[i], "email": emails[i]} for i in range(pool_size)],
+        )
+        db.execute(
+            insert(Room),
+            [
+                {
+                    "name": room_names[i],
+                    "capacity": 2,
+                    "price_per_night": 99.99,
+                }
+                for i in range(pool_size)
+            ],
+        )
+        db.commit()
+
+        user_ids = [
+            row[0]
+            for row in db.query(User.id)
+            .filter(User.email.in_(emails))
+            .order_by(User.id)
+            .all()
+        ]
+        room_ids = [
+            row[0]
+            for row in db.query(Room.id)
+            .filter(Room.name.in_(room_names))
+            .order_by(Room.id)
+            .all()
+        ]
+
+        today = datetime.date.today()
+        db.execute(
+            insert(Reservation),
+            [
+                {
+                    "user_id": user_ids[i % pool_size],
+                    "room_id": room_ids[i % pool_size],
+                    "check_in": today + datetime.timedelta(days=i // pool_size),
+                    "check_out": today
+                    + datetime.timedelta(days=i // pool_size + 1),
+                }
+                for i in range(quantity)
+            ],
+        )
+        db.commit()
+
+        ids = (
+            db.query(Reservation.id)
+            .filter(Reservation.user_id.in_(user_ids))
+            .order_by(Reservation.id)
+            .all()
+        )
+        return [row[0] for row in ids]
 
     @staticmethod
     def get_user_reservations(db: Session, user_id: int) -> list[Reservation]:
