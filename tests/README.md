@@ -314,7 +314,26 @@ k6 run tests/performance/load/users/get_users.js -e K6_SCENARIO=soak -e K6_SOAK_
 k6 run tests/performance/load/users/get_users.js --out json=results.json
 ```
 
-The user scripts share the `randomIntBetween` helper from `tests/performance/load/helpers.js`; the delete test additionally uses `tests/performance/load/delete_helpers.js` (`resolveSeedKey`, `parseDuration`, `computePoolConfig`).
+Rooms overload every `users` counterpart with a `rooms/` folder:
+
+```bash
+# Create rooms (name includes RUN_ID to stay unique)
+k6 run tests/performance/load/rooms/post_rooms.js
+
+# List rooms (seeds 1 room in setup() if the list is empty)
+k6 run tests/performance/load/rooms/get_rooms.js
+
+# Get a room by id (id derived from __VU last digit, 0 -> 10)
+k6 run tests/performance/load/rooms/get_room_by_id.js
+
+# Update a room by id (id derived from __VU last digit, 0 -> 10)
+k6 run tests/performance/load/rooms/put_room_by_id.js
+
+# Delete rooms (seeds a soft-delete pool via POST /seed/rooms in setup())
+k6 run tests/performance/load/rooms/delete_room.js
+```
+
+The scripts share the `randomIntBetween` helper from `tests/performance/load/helpers.js`; the delete tests additionally use `tests/performance/load/delete_helpers.js` (`resolveSeedKey`, `parseDuration`, `computePoolConfig`).
 
 ### Profiles
 
@@ -327,7 +346,7 @@ The user scripts share the `randomIntBetween` helper from `tests/performance/loa
 
 Select with `-e K6_SCENARIO=<name>`. The `staircase` profile holds each step ~45s so percentile metrics are stable.
 
-### Delete-test seed pool
+### Delete-test seed pool — users
 
 `delete_user.js` uses the same scenarios. Because `DELETE /users/{id}` permanently removes rows, `setup()` calls the dedicated **`POST /seed/users`** route (not the business `POST /users`) with a quantity derived from the scenario so the pool never drains mid-run (only the route under test is hit during load):
 
@@ -338,6 +357,12 @@ Select with `-e K6_SCENARIO=<name>`. The `staircase` profile holds each step ~45
 The seed route is authenticated: requests must send the `X-Seed-Key` header matching `SEED_API_KEY` from the project `.env`. k6 reads the key from `../../../../.env` (relative to the script under `users/`) automatically, or you can override it with `-e SEED_API_KEY=<value>`.
 
 The load-test routes are only registered when `ENABLE_LOADTEST_ENDPOINTS=true` in `.env` (defaults to off/false when unset), so they are never exposed unless explicitly enabled.
+
+### Delete-test seed pool — rooms
+
+`delete_room.js` uses the same scenarios as `delete_user.js`. `setup()` calls the dedicated **`POST /seed/rooms`** route (not the business `POST /rooms`) with the same pool formula (`quantity = maxVUs * (totalSeconds / AVG_ITER_SECONDS) * 1.2`), bulk-inserting the rooms directly into Postgres and returning their ids. Each VU is given a disjoint slice (`floor(poolSize / maxVUs)`) so no two VUs target the same id.
+
+Because `DELETE /rooms/{id}` is a **soft-delete** (sets `is_active=false`, row stays, re-deletes still return 204), the pool never 404s even if an id is deleted twice. `setupTimeout` is `10m`. Override the pool with `-e K6_DELETE_POOL_SIZE=<n>`. The `/seed/rooms` route is authenticated with the `X-Seed-Key` header, read from `../../../../.env` (relative to the script under `rooms/`) or overridable with `-e SEED_API_KEY=<value>`, and is only registered when `ENABLE_LOADTEST_ENDPOINTS=true`.
 
 ### Thresholds
 
