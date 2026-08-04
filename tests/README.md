@@ -333,7 +333,23 @@ k6 run tests/performance/load/rooms/put_room_by_id.js
 k6 run tests/performance/load/rooms/delete_room.js
 ```
 
-The scripts share the `randomIntBetween` helper from `tests/performance/load/helpers.js`; the delete tests additionally use `tests/performance/load/delete_helpers.js` (`resolveSeedKey`, `parseDuration`, `computePoolConfig`).
+Reservations live under `tests/performance/load/reservations/`:
+
+```bash
+# Create reservations (unique future date windows per iteration to avoid 409s)
+k6 run tests/performance/load/reservations/post_reservations.js
+
+# List a user's reservations (seeds ≥10 users + 1 reservation each in setup())
+k6 run tests/performance/load/reservations/get_user_reservations.js
+
+# List a room's reservations (seeds ≥10 rooms + 1 reservation each in setup())
+k6 run tests/performance/load/reservations/get_room_reservations.js
+
+# Cancel reservations from a pool created via POST /seed/reservations in setup()
+k6 run tests/performance/load/reservations/cancel_reservation.js
+```
+
+The scripts share the `randomIntBetween` helper from `tests/performance/load/helpers.js`; the delete/cancel tests additionally use `tests/performance/load/delete_helpers.js` (`resolveSeedKey`, `parseDuration`, `computePoolConfig`).
 
 ### Profiles
 
@@ -363,6 +379,16 @@ The load-test routes are only registered when `ENABLE_LOADTEST_ENDPOINTS=true` i
 `delete_room.js` uses the same scenarios as `delete_user.js`. `setup()` calls the dedicated **`POST /seed/rooms`** route (not the business `POST /rooms`) with the same pool formula (`quantity = maxVUs * (totalSeconds / AVG_ITER_SECONDS) * 1.2`), bulk-inserting the rooms directly into Postgres and returning their ids. Each VU is given a disjoint slice (`floor(poolSize / maxVUs)`) so no two VUs target the same id.
 
 Because `DELETE /rooms/{id}` is a **soft-delete** (sets `is_active=false`, row stays, re-deletes still return 204), the pool never 404s even if an id is deleted twice. `setupTimeout` is `10m`. Override the pool with `-e K6_DELETE_POOL_SIZE=<n>`. The `/seed/rooms` route is authenticated with the `X-Seed-Key` header, read from `../../../../.env` (relative to the script under `rooms/`) or overridable with `-e SEED_API_KEY=<value>`, and is only registered when `ENABLE_LOADTEST_ENDPOINTS=true`.
+
+### Cancel-test seed pool — reservations
+
+`cancel_reservation.js` uses the same scenarios. Because `PATCH /reservations/{id}/cancel` works only once per reservation (a second call returns **400**), `setup()` calls the dedicated **`POST /seed/reservations`** route with a quantity from the same pool formula as the delete tests (`quantity = maxVUs * (totalSeconds / AVG_ITER_SECONDS) * 1.2`). Each VU is given a disjoint slice (`floor(poolSize / maxVUs)`) so no two VUs cancel the same id. Override with `-e K6_DELETE_POOL_SIZE=<n>`. `setupTimeout` is `10m`.
+
+`POST /seed/reservations` is authenticated with `X-Seed-Key` (read from `../../../../.env` or `-e SEED_API_KEY=<value>`) and only registered when `ENABLE_LOADTEST_ENDPOINTS=true`. Seeding generates its own user + room pools (100 each) plus `quantity` **confirmed** reservations with per-room non-overlapping dates, so it never trips the `no_overlap` GiST exclusion constraint (confirmed reservations on the same room must not have overlapping date ranges — see the schema note below).
+
+### Reservations create test — avoiding 409 collisions
+
+`POST /reservations/` is guarded by the `no_overlap` exclusion constraint: two confirmed reservations on the same room with overlapping dates conflict (the route returns **409** from either the overlap query or an `IntegrityError`). Because 4xx responses fail the `http_req_failed < 1%` threshold, `post_reservations.js` writes each iteration with a **globally unique date window** so they never overlap: `offset = __ITER * maxVus + (__VU - 1)`, `check_in = today + offset`, `check_out = check_in + 1`. Every POST therefore returns `201`. `setup()` seeds a single active user + room (via the business `POST /users`/`POST /rooms` or reuses existing rows).
 
 ### Thresholds
 
