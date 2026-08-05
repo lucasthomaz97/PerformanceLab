@@ -2,21 +2,6 @@ const AVG_ITER_SECONDS = 1.0;
 const POOL_SAFETY = 1.2;
 const DELETE_POOL_OVERRIDE = __ENV.K6_DELETE_POOL_SIZE || 0;
 
-export function resolveSeedKey() {
-  if (__ENV.SEED_API_KEY) return __ENV.SEED_API_KEY;
-  let envText = '';
-  try {
-    envText = open('../../../../.env');
-  } catch (e) {
-    return '';
-  }
-  for (const line of envText.split(/\r?\n/)) {
-    const match = /^SEED_API_KEY=(.*)$/.exec(line.trim());
-    if (match) return match[1];
-  }
-  return '';
-}
-
 export function parseDuration(duration) {
   const match = /^(\d+(?:\.\d+)?)([smh])$/.exec(duration);
   if (!match) throw new Error(`unsupported k6 duration: ${duration}`);

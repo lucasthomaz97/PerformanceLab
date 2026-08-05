@@ -21,9 +21,12 @@ tests/
 │   └── test_reservations_api.py
 ├── performance/         # k6 load tests (not pytest) - see "Performance & Load Tests"
 │   ├── helpers/
-│   │   ├── helpers.js         # randomIntBetween shared helper
-│   │   ├── delete_helpers.js  # resolveSeedKey, parseDuration, computePoolConfig
-│   │   └── scenarios.js       # shared smoke/load/staircase/soak/spike profiles
+│   │   ├── general_helpers.js         # randomIntBetween shared helper
+│   │   ├── delete_helpers.js  # parseDuration, computePoolConfig (seed-pool sizing)
+│   │   ├── options_helpers.js         # loadOptions() + env-tunable thresholds
+│   │   ├── request_helpers.js         # HTTP verb wrappers, logFailure, parseBody, sleepBetween, checkListFields
+│   │   ├── scenarios_helpers.js       # shared smoke/load/staircase/soak/spike profiles
+│   │   └── seed_helpers.js     # seed API route (seedViaRoute, seedPool, resolveSeedKey)
 │   └── load/
 │       ├── users/             # one k6 script per HTTP operation
 │       ├── rooms/
@@ -364,7 +367,14 @@ k6 run tests/performance/load/reservations/get_room_reservations.js
 k6 run tests/performance/load/reservations/cancel_reservation.js
 ```
 
-The scripts share the `randomIntBetween` helper from `tests/performance/load/helpers.js`; the delete/cancel tests additionally use `tests/performance/load/delete_helpers.js` (`resolveSeedKey`, `parseDuration`, `computePoolConfig`). All profiles are centralized in `tests/performance/helpers/scenarios.js` so every route test runs identical load shapes.
+The scripts share the helpers in `tests/performance/helpers/`:
+
+- `general_helpers.js` — `randomIntBetween`
+- `request_helpers.js` — `postJson`/`putJson`/`patchJson`/`getJson`/`delJson` (embed the `Content-Type` header), `logFailure`, `parseBody`, `sleepBetween`, `nextIdFromVus`, `checkListFields`
+- `options_helpers.js` — `loadOptions({ setupTimeout })` builds the scenarios + thresholds block every script used to repeat; thresholds are env-tunable (see [Thresholds](#thresholds))
+- `seed_helpers.js` — encapsulates the internal seed API (`seedViaRoute`, `sliceForVus`, `seedPool`, `resolveSeedKey`); the delete/cancel tests' `setup()` is just `return seedPool('rooms' | 'users' | 'reservations')`
+- `delete_helpers.js` — `parseDuration`, `computePoolConfig` (seed-pool sizing)
+- `scenarios_helpers.js` — all profiles are centralized so every route test runs identical load shapes
 
 ### Profiles
 
@@ -416,6 +426,16 @@ All three thresholds use `abortOnFail: false` so the test **records** saturation
 - `http_req_duration`: `p(95) < 500`
 - `http_req_waiting`: `p(95) < 500` — time-to-first-byte, the metric that exposes DB-pool queueing
 
+Thresholds are centralized in `helpers/options_helpers.js` (`loadOptions()`) and can be relaxed per run without editing files — e.g. a soak on a slow CI box:
+
+```bash
+k6 run tests/performance/load/users/get_users.js -e K6_SCENARIO=soak -e K6_P95_MS=1000 -e K6_ERROR_RATE=0.05
+```
+
+### Test-ordering caveat
+
+`delete_user.js` permanently removes users, and `delete_room.js` soft-deletes rooms (hidden from `GET /rooms`). The by-id tests (`get_user_by_id`, `get_room_by_id`, `put_user_by_id`, `put_room_by_id`) assume ids **1–10** exist, so running a delete/cancel test first will produce 404s and threshold breaches on later by-id runs. If the load-test DB is not disposable, reseed (or re-run a create/list test) before by-id runs.
+
 ### How to read the knee
 
 When concurrency exceeds the pool/threadpool capacity, requests queue inside the app before hitting the DB. Symptoms:
@@ -455,9 +475,12 @@ tests/
 │   └── test_reservations_api.py
 ├── performance/         # Testes de carga k6 (não pytest) - veja "Testes de Performance & Carga"
 │   ├── helpers/
-│   │   ├── helpers.js         # helper compartilhado randomIntBetween
-│   │   ├── delete_helpers.js  # resolveSeedKey, parseDuration, computePoolConfig
-│   │   └── scenarios.js       # perfils compartilhados smoke/load/staircase/soak/spike
+│   │   ├── general_helpers.js         # helper compartilhado randomIntBetween
+│   │   ├── delete_helpers.js  # parseDuration, computePoolConfig (dimensionamento do seed pool)
+│   │   ├── options_helpers.js         # loadOptions() + thresholds configuráveis via env
+│   │   ├── request_helpers.js         # wrappers HTTP, logFailure, parseBody, sleepBetween, checkListFields
+│   │   ├── scenarios_helpers.js       # perfils compartilhados smoke/load/staircase/soak/spike
+│   │   └── seed_helpers.js     # rota de seed (seedViaRoute, seedPool, resolveSeedKey)
 │   └── load/
 │       ├── users/             # um script k6 por operação HTTP
 │       ├── rooms/
@@ -798,7 +821,14 @@ k6 run tests/performance/load/reservations/get_room_reservations.js
 k6 run tests/performance/load/reservations/cancel_reservation.js
 ```
 
-Os scripts compartilham o helper `randomIntBetween` de `tests/performance/load/helpers.js`; os testes de exclusão/cancelamento usam adicionalmente `tests/performance/load/delete_helpers.js` (`resolveSeedKey`, `parseDuration`, `computePoolConfig`). Todos os perfis estão centralizados em `tests/performance/helpers/scenarios.js` para que cada teste de rota execute formas de carga idênticas.
+Os scripts compartilham os helpers em `tests/performance/helpers/`:
+
+- `general_helpers.js` — `randomIntBetween`
+- `request_helpers.js` — `postJson`/`putJson`/`patchJson`/`getJson`/`delJson` (embutem o header `Content-Type`), `logFailure`, `parseBody`, `sleepBetween`, `nextIdFromVus`, `checkListFields`
+- `options_helpers.js` — `loadOptions({ setupTimeout })` monta o bloco de cenários + thresholds que todo script repetia; thresholds são configuráveis via env (veja [Thresholds](#thresholds))
+- `seed_helpers.js` — encapsula a API interna de seed (`seedViaRoute`, `sliceForVus`, `seedPool`, `resolveSeedKey`); o `setup()` dos testes de delete/cancel vira `return seedPool('rooms' | 'users' | 'reservations')`
+- `delete_helpers.js` — `parseDuration`, `computePoolConfig` (dimensionamento do seed pool)
+- `scenarios_helpers.js` — todos os perfis estão centralizados para que cada teste de rota execute formas de carga idênticas
 
 ### Perfis
 
@@ -849,6 +879,16 @@ Todos os três limiares usam `abortOnFail: false` para que o teste **registre** 
 - `http_req_failed`: `rate < 0.01`
 - `http_req_duration`: `p(95) < 500`
 - `http_req_waiting`: `p(95) < 500` — time-to-first-byte, a métrica que expõe o enfileiramento no pool do DB
+
+Os limiares são centralizados em `helpers/options_helpers.js` (`loadOptions()`) e podem ser relaxados por execução sem editar arquivos — ex.: soak numa máquina lenta:
+
+```bash
+k6 run tests/performance/load/users/get_users.js -e K6_SCENARIO=soak -e K6_P95_MS=1000 -e K6_ERROR_RATE=0.05
+```
+
+### Caveat da ordem dos testes
+
+`delete_user.js` remove usuários permanentemente e `delete_room.js` aplica soft-delete em salas (ocultas do `GET /rooms`). Os testes por id (`get_user_by_id`, `get_room_by_id`, `put_user_by_id`, `put_room_by_id`) assumem que existem os ids **1–10**; rodar um teste de delete/cancel antes deles gera 404s e violações de limiar nos runs seguintes. Se o DB de carga não for descartável, faça novo seed (ou rode um teste de create/list) antes dos testes por id.
 
 ### Como ler o "knee"
 

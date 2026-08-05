@@ -1,68 +1,26 @@
-import http from 'k6/http';
-import { check, sleep } from 'k6';
-import { randomIntBetween } from '../../helpers/helpers.js';
-import { computePoolConfig, resolveSeedKey } from '../../helpers/delete_helpers.js';
-import { activeProfiles, optionsScenarios, resolveScenarioName } from '../../helpers/scenarios.js';
+import { check } from 'k6';
+import { delJson, logFailure, sleepBetween } from '../../helpers/request_helpers.js';
+import { loadOptions } from '../../helpers/options_helpers.js';
+import { seedPool } from '../../helpers/seed_helpers.js';
 
 const BASE_URL = __ENV.BASE_URL || 'http://localhost:8000';
-const SCENARIO = resolveScenarioName();
 
-const SEED_API_KEY = resolveSeedKey();
-
-export const options = {
-  scenarios: optionsScenarios(SCENARIO),
-  setupTimeout: '10m',
-  thresholds: {
-    http_req_failed: [{ threshold: 'rate<0.01', abortOnFail: false }],
-    http_req_duration: [{ threshold: 'p(95)<500', abortOnFail: false }],
-    http_req_waiting: [{ threshold: 'p(95)<500', abortOnFail: false }],
-  },
-};
+export const options = loadOptions({ setupTimeout: '10m' });
 
 export function setup() {
-  const { poolSize, maxVus } = computePoolConfig(activeProfiles(SCENARIO));
-
-  const res = http.post(
-    `${BASE_URL}/seed/rooms`,
-    JSON.stringify({ quantity: poolSize }),
-    {
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Seed-Key': SEED_API_KEY,
-      },
-      tags: { endpoint: 'POST /seed/rooms' },
-    },
-  );
-
-  if (res.status !== 201) {
-    throw new Error(`seed POST /seed/rooms -> ${res.status}: ${res.body}`);
-  }
-
-  const ids = res.json().ids;
-  const sliceSize = Math.floor(ids.length / maxVus);
-
-  console.info(`seeded ${ids.length} rooms, slice per VU: ${sliceSize}`);
-
-  return { ids, sliceSize };
+  return seedPool('rooms');
 }
 
 export default function (data) {
   const idx = ((__VU - 1) * data.sliceSize) + (__ITER % data.sliceSize);
   const id = data.ids[idx];
 
-  const response = http.del(
-    `${BASE_URL}/rooms/${id}`,
-    null,
-    { tags: { endpoint: `DELETE /rooms/${id}` } },
-  );
-
-  if (response.status >= 400) {
-    console.error(`DELETE /rooms/${id} -> ${response.status}: ${response.body}`);
-  }
+  const response = delJson(`${BASE_URL}/rooms/${id}`, { endpoint: `DELETE /rooms/${id}` });
+  logFailure('DELETE', `${BASE_URL}/rooms/${id}`, response);
 
   check(response, {
     'status 204': (r) => r.status === 204,
   });
 
-  sleep(randomIntBetween(500, 1500));
+  sleepBetween();
 }

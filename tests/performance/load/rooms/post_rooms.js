@@ -1,47 +1,28 @@
-import http from 'k6/http';
-import { check, sleep } from 'k6';
-import { randomIntBetween } from '../../helpers/helpers.js';
-import { optionsScenarios, resolveScenarioName } from '../../helpers/scenarios.js';
+import { check } from 'k6';
+import { postJson, logFailure, parseBody, sleepBetween } from '../../helpers/request_helpers.js';
+import { loadOptions } from '../../helpers/options_helpers.js';
 
 const BASE_URL = __ENV.BASE_URL || 'http://localhost:8000';
 const RUN_ID = Date.now();
-const SCENARIO = resolveScenarioName();
 
-export const options = {
-  scenarios: optionsScenarios(SCENARIO),
-  thresholds: {
-    http_req_failed: [{ threshold: 'rate<0.01', abortOnFail: false }],
-    http_req_duration: [{ threshold: 'p(95)<500', abortOnFail: false }],
-    http_req_waiting: [{ threshold: 'p(95)<500', abortOnFail: false }],
-  },
-};
+export const options = loadOptions();
 
 export default function () {
   const name = `Load Test Room ${RUN_ID}-${__VU}-${__ITER}`;
   const capacity = 2;
   const price_per_night = 149.99;
 
-  const payload = JSON.stringify({
+  const payload = {
     name,
     capacity,
     price_per_night,
     description: 'Load test room',
-  });
+  };
 
-  const response = http.post(
-    `${BASE_URL}/rooms`,
-    payload,
-    {
-      headers: { 'Content-Type': 'application/json' },
-      tags: { endpoint: 'POST /rooms' },
-    },
-  );
+  const response = postJson(`${BASE_URL}/rooms`, payload, { endpoint: 'POST /rooms' });
+  logFailure('POST', `${BASE_URL}/rooms`, response);
 
-  if (response.status >= 400) {
-    console.error(`POST /rooms -> ${response.status}: ${response.body}`);
-  }
-
-  const room = response.status === 201 ? response.json() : {};
+  const room = parseBody(response, 201, {});
 
   check(response, {
     'status 201': (r) => r.status === 201,
@@ -55,5 +36,5 @@ export default function () {
     'created_at exists': (r) => r.created_at !== undefined,
   });
 
-  sleep(randomIntBetween(500, 1500));
+  sleepBetween();
 }
