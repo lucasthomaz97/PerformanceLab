@@ -1,8 +1,7 @@
 import { check } from 'k6';
 import { getJson, postJson, checkListFields, logFailure, parseBody, sleepBetween } from '../../helpers/request_helpers.js';
 import { loadOptions } from '../../helpers/options_helpers.js';
-
-const BASE_URL = __ENV.BASE_URL || 'http://localhost:8000';
+import { BASE_URL } from '../../helpers/config.js';
 
 export const options = loadOptions();
 

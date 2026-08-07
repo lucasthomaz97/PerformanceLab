@@ -1,9 +1,7 @@
 import { check } from 'k6';
 import { getJson, postJson, nextIdFromVus, logFailure, parseBody, sleepBetween } from '../../helpers/request_helpers.js';
 import { loadOptions } from '../../helpers/options_helpers.js';
-
-const BASE_URL = __ENV.BASE_URL || 'http://localhost:8000';
-const RUN_ID = Date.now();
+import { BASE_URL, RUN_ID } from '../../helpers/config.js';
 
 export const options = loadOptions();
 

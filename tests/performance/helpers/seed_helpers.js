@@ -1,8 +1,7 @@
 import http from 'k6/http';
-import { computePoolConfig } from './delete_helpers.js';
+import { computePoolConfig } from './pool_helpers.js';
 import { activeProfiles, resolveScenarioName } from './scenarios_helpers.js';
-
-const BASE_URL = __ENV.BASE_URL || 'http://localhost:8000';
+import { BASE_URL } from './config.js';
 
 const ENV_CANDIDATES = [
   '../../../.env',
@@ -58,6 +57,11 @@ export function seedViaRoute(kind, quantity) {
 
 export function sliceForVus(ids, maxVus) {
   const sliceSize = Math.floor(ids.length / maxVus);
+  if (sliceSize === 0) {
+    throw new Error(
+      `pool size ${ids.length} < maxVus ${maxVus}; raise K6_DELETE_POOL_SIZE`,
+    );
+  }
   console.info(`seeded ${ids.length} rows, slice per VU: ${sliceSize}`);
   return { ids, sliceSize };
 }

@@ -1,16 +1,9 @@
 import { check } from 'k6';
 import { getJson, postJson, checkListFields, logFailure, parseBody, sleepBetween } from '../../helpers/request_helpers.js';
 import { loadOptions } from '../../helpers/options_helpers.js';
-
-const BASE_URL = __ENV.BASE_URL || 'http://localhost:8000';
-const RUN_ID = Date.now();
-const DAY_MS = 86400000;
+import { BASE_URL, RUN_ID, isoDateFromOffset } from '../../helpers/config.js';
 
 export const options = loadOptions();
-
-function isoDateFromOffset(offsetDays) {
-  return new Date(Date.now() + (offsetDays * DAY_MS)).toISOString().slice(0, 10);
-}
 
 export function setup() {
   const userIds = [];

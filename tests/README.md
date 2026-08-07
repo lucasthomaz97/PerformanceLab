@@ -21,8 +21,9 @@ tests/
 │   └── test_reservations_api.py
 ├── performance/         # k6 load tests (not pytest) - see "Performance & Load Tests"
 │   ├── helpers/
+│   │   ├── config.js               # BASE_URL, RUN_ID, SCENARIO, DAY_MS, isoDateFromOffset
 │   │   ├── general_helpers.js         # randomIntBetween shared helper
-│   │   ├── delete_helpers.js  # parseDuration, computePoolConfig (seed-pool sizing)
+│   │   ├── pool_helpers.js  # parseDuration, computePoolConfig (seed-pool sizing)
 │   │   ├── options_helpers.js         # loadOptions() + env-tunable thresholds
 │   │   ├── request_helpers.js         # HTTP verb wrappers, logFailure, parseBody, sleepBetween, checkListFields
 │   │   ├── scenarios_helpers.js       # shared smoke/load/staircase/soak/spike profiles
@@ -371,9 +372,10 @@ The scripts share the helpers in `tests/performance/helpers/`:
 
 - `general_helpers.js` — `randomIntBetween`
 - `request_helpers.js` — `postJson`/`putJson`/`patchJson`/`getJson`/`delJson` (embed the `Content-Type` header), `logFailure`, `parseBody`, `sleepBetween`, `nextIdFromVus`, `checkListFields`
+- `config.js` — `BASE_URL`, `RUN_ID`, `SCENARIO`, `DAY_MS` and `isoDateFromOffset(offsetDays)` (shared per-file preamble)
 - `options_helpers.js` — `loadOptions({ setupTimeout })` builds the scenarios + thresholds block every script used to repeat; thresholds are env-tunable (see [Thresholds](#thresholds))
 - `seed_helpers.js` — encapsulates the internal seed API (`seedViaRoute`, `sliceForVus`, `seedPool`, `resolveSeedKey`); the delete/cancel tests' `setup()` is just `return seedPool('rooms' | 'users' | 'reservations')`
-- `delete_helpers.js` — `parseDuration`, `computePoolConfig` (seed-pool sizing)
+- `pool_helpers.js` — `parseDuration`, `computePoolConfig` (seed-pool sizing)
 - `scenarios_helpers.js` — all profiles are centralized so every route test runs identical load shapes
 
 ### Profiles
@@ -394,7 +396,7 @@ Use `-e K6_SCENARIO=all` to run every profile at once (all five run in parallel)
 
 `delete_user.js` uses the same scenarios. Because `DELETE /users/{id}` permanently removes rows, `setup()` calls the dedicated **`POST /seed/users`** route (not the business `POST /users`) with a quantity derived from the scenario so the pool never drains mid-run (only the route under test is hit during load):
 
-`quantity = maxVUs * (totalSeconds / AVG_ITER_SECONDS) * 1.2`, where `AVG_ITER_SECONDS = 1.0` (sleep is 500–1500ms, so real iterations are slightly slower — over-provisioning is the safe direction). The route bulk-inserts the users directly into Postgres and returns their ids; each VU is given a disjoint slice (`floor(poolSize / maxVUs)`) so no two VUs target the same id (no 404 races). Override with `-e K6_DELETE_POOL_SIZE=<n>`. Expect large seed counts on `soak`/`staircase` (e.g. ~7.9k on `load`, ~22k on `staircase`, ~33k on `soak`).
+`quantity = maxVUs * (totalSeconds / AVG_ITER_SECONDS) * 1.2`, where `AVG_ITER_SECONDS = 1.0` (sleep is 500–1500ms, so real iterations are slightly slower — over-provisioning is the safe direction). The route bulk-inserts the users directly into Postgres and returns their ids; each VU is given a disjoint slice (`floor(poolSize / maxVUs)`) so no two VUs target the same id (no 404 races). Override with `-e K6_DELETE_POOL_SIZE=<n>`. Expect large seed counts on `soak`/`staircase` (e.g. ~7.9k on `load`, ~22k on `staircase`, ~33k on `soak`). If the override is smaller than `maxVUs`, `sliceForVus` aborts `setup()` with a clear error (`pool size X < maxVus Y`) instead of firing malformed `/users/undefined` requests.
 
 `setupTimeout` is set to `10m` (default is 60s) so seeding large pools doesn't abort before VUs start.
 
@@ -416,7 +418,7 @@ Because `DELETE /rooms/{id}` is a **soft-delete** (sets `is_active=false`, row s
 
 ### Reservations create test — avoiding 409 collisions
 
-`POST /reservations/` is guarded by the `no_overlap` exclusion constraint: two confirmed reservations on the same room with overlapping dates conflict (the route returns **409** from either the overlap query or an `IntegrityError`). Because 4xx responses fail the `http_req_failed < 1%` threshold, `post_reservations.js` writes each iteration with a **globally unique date window** so they never overlap: `offset = __ITER * maxVus + (__VU - 1)`, `check_in = today + offset`, `check_out = check_in + 1`. Every POST therefore returns `201`. `setup()` seeds a single active user + room (via the business `POST /users`/`POST /rooms` or reuses existing rows).
+`POST /reservations/` is guarded by the `no_overlap` exclusion constraint: two confirmed reservations on the same room with overlapping dates conflict (the route returns **409** from either the overlap query or an `IntegrityError`). Because 4xx responses fail the `http_req_failed < 1%` threshold, `post_reservations.js` writes each iteration with a **globally unique date window** so they never overlap: `offset = __ITER * maxVus + (__VU - 1)`, `check_in = today + offset`, `check_out = check_in + 1`. Every POST therefore returns `201`. `setup()` reuses the first existing user (a user may hold many reservations) but **always creates a fresh room** (unique name) so leftover confirmed reservations from previous runs can never collide with the new run's windows.
 
 ### Thresholds
 
@@ -475,8 +477,9 @@ tests/
 │   └── test_reservations_api.py
 ├── performance/         # Testes de carga k6 (não pytest) - veja "Testes de Performance & Carga"
 │   ├── helpers/
+│   │   ├── config.js               # BASE_URL, RUN_ID, SCENARIO, DAY_MS, isoDateFromOffset
 │   │   ├── general_helpers.js         # helper compartilhado randomIntBetween
-│   │   ├── delete_helpers.js  # parseDuration, computePoolConfig (dimensionamento do seed pool)
+│   │   ├── pool_helpers.js  # parseDuration, computePoolConfig (dimensionamento do seed pool)
 │   │   ├── options_helpers.js         # loadOptions() + thresholds configuráveis via env
 │   │   ├── request_helpers.js         # wrappers HTTP, logFailure, parseBody, sleepBetween, checkListFields
 │   │   ├── scenarios_helpers.js       # perfils compartilhados smoke/load/staircase/soak/spike
@@ -825,9 +828,10 @@ Os scripts compartilham os helpers em `tests/performance/helpers/`:
 
 - `general_helpers.js` — `randomIntBetween`
 - `request_helpers.js` — `postJson`/`putJson`/`patchJson`/`getJson`/`delJson` (embutem o header `Content-Type`), `logFailure`, `parseBody`, `sleepBetween`, `nextIdFromVus`, `checkListFields`
+- `config.js` — `BASE_URL`, `RUN_ID`, `SCENARIO`, `DAY_MS` e `isoDateFromOffset(offsetDays)` (preâmbulo compartilhado entre scripts)
 - `options_helpers.js` — `loadOptions({ setupTimeout })` monta o bloco de cenários + thresholds que todo script repetia; thresholds são configuráveis via env (veja [Thresholds](#thresholds))
 - `seed_helpers.js` — encapsula a API interna de seed (`seedViaRoute`, `sliceForVus`, `seedPool`, `resolveSeedKey`); o `setup()` dos testes de delete/cancel vira `return seedPool('rooms' | 'users' | 'reservations')`
-- `delete_helpers.js` — `parseDuration`, `computePoolConfig` (dimensionamento do seed pool)
+- `pool_helpers.js` — `parseDuration`, `computePoolConfig` (dimensionamento do seed pool)
 - `scenarios_helpers.js` — todos os perfis estão centralizados para que cada teste de rota execute formas de carga idênticas
 
 ### Perfis
@@ -848,7 +852,7 @@ Use `-e K6_SCENARIO=all` para executar todos os perfis de uma vez (os cinco roda
 
 `delete_user.js` usa os mesmos cenários. Como `DELETE /users/{id}` remove linhas permanentemente, o `setup()` chama a rota dedicada **`POST /seed/users`** (não o `POST /users` de negócio) com uma quantidade derivada do cenário, para que o pool nunca se esgote no meio da execução (apenas a rota sob teste é atingida durante a carga):
 
-`quantity = maxVUs * (totalSeconds / AVG_ITER_SECONDS) * 1.2`, onde `AVG_ITER_SECONDS = 1.0` (o sleep é 500–1500ms, então iterações reais são um pouco mais lentas — superdimensionar é a direção segura). A rota insere os usuários em massa diretamente no Postgres e retorna seus ids; cada VU recebe uma fatia disjunta (`floor(poolSize / maxVUs)`) para que dois VUs não atinjam o mesmo id (sem corridas de 404). Sobrescreva com `-e K6_DELETE_POOL_SIZE=<n>`. Espere grandes contagens de seed em `soak`/`staircase` (ex.: ~7,9k em `load`, ~22k em `staircase`, ~33k em `soak`).
+`quantity = maxVUs * (totalSeconds / AVG_ITER_SECONDS) * 1.2`, onde `AVG_ITER_SECONDS = 1.0` (o sleep é 500–1500ms, então iterações reais são um pouco mais lentas — superdimensionar é a direção segura). A rota insere os usuários em massa diretamente no Postgres e retorna seus ids; cada VU recebe uma fatia disjunta (`floor(poolSize / maxVUs)`) para que dois VUs não atinjam o mesmo id (sem corridas de 404). Sobrescreva com `-e K6_DELETE_POOL_SIZE=<n>`. Espere grandes contagens de seed em `soak`/`staircase` (ex.: ~7,9k em `load`, ~22k em `staircase`, ~33k em `soak`). Se a sobrescrita for menor que `maxVus`, o `sliceForVus` aborta o `setup()` com um erro claro (`pool size X < maxVus Y`) em vez de disparar requisições inválidas para `/users/undefined`.
 
 `setupTimeout` é definido como `10m` (o padrão é 60s) para que o seed de grandes pools não aborte antes de os VUs iniciarem.
 
@@ -870,7 +874,7 @@ Como `DELETE /rooms/{id}` é um **soft-delete** (define `is_active=false`, a lin
 
 ### Teste de criação de reservas — evitando colisões 409
 
-`POST /reservations/` é protegido pela restrição de exclusão `no_overlap`: duas reservas confirmadas na mesma sala com datas sobrepostas entram em conflito (a rota retorna **409** tanto pela query de sobreposição quanto por um `IntegrityError`). Como respostas 4xx reprovam o limiar `http_req_failed < 1%`, o `post_reservations.js` grava cada iteração com uma **janela de datas globalmente única** para nunca sobrepor: `offset = __ITER * maxVus + (__VU - 1)`, `check_in = hoje + offset`, `check_out = check_in + 1`. Cada POST, portanto, retorna `201`. O `setup()` faz seed de um único usuário + sala ativos (via `POST /users`/`POST /rooms` de negócio ou reutiliza linhas existentes).
+`POST /reservations/` é protegido pela restrição de exclusão `no_overlap`: duas reservas confirmadas na mesma sala com datas sobrepostas entram em conflito (a rota retorna **409** tanto pela query de sobreposição quanto por um `IntegrityError`). Como respostas 4xx reprovam o limiar `http_req_failed < 1%`, o `post_reservations.js` grava cada iteração com uma **janela de datas globalmente única** para nunca sobrepor: `offset = __ITER * maxVus + (__VU - 1)`, `check_in = hoje + offset`, `check_out = check_in + 1`. Cada POST, portanto, retorna `201`. O `setup()` reutiliza o primeiro usuário existente (um usuário pode ter muitas reservas), mas **sempre cria uma sala nova** (nome único) para que reservas confirmadas de execuções anteriores nunca colidam com as janelas da nova execução.
 
 ### Thresholds
 

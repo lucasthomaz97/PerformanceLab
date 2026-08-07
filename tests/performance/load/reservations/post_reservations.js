@@ -1,26 +1,17 @@
 import { check } from 'k6';
 import { getJson, postJson, logFailure, parseBody, sleepBetween } from '../../helpers/request_helpers.js';
 import { loadOptions } from '../../helpers/options_helpers.js';
-import { computePoolConfig } from '../../helpers/delete_helpers.js';
-import { activeProfiles, resolveScenarioName } from '../../helpers/scenarios_helpers.js';
-
-const BASE_URL = __ENV.BASE_URL || 'http://localhost:8000';
-const SCENARIO = resolveScenarioName();
-const DAY_MS = 86400000;
+import { computePoolConfig } from '../../helpers/pool_helpers.js';
+import { activeProfiles } from '../../helpers/scenarios_helpers.js';
+import { BASE_URL, SCENARIO, DAY_MS } from '../../helpers/config.js';
 
 export const options = loadOptions();
-
-function isoDateFromOffset(offsetDays) {
-  return new Date(Date.now() + offsetDays * DAY_MS).toISOString().slice(0, 10);
-}
 
 export function setup() {
   const { maxVus } = computePoolConfig(activeProfiles(SCENARIO));
 
-  let userId;
-  let roomId;
-
   const usersRes = getJson(`${BASE_URL}/users`);
+  let userId;
   if (usersRes.status === 200 && usersRes.json().length > 0) {
     userId = usersRes.json()[0].id;
   } else {
@@ -34,28 +25,23 @@ export function setup() {
     userId = res.json().id;
   }
 
-  const roomsRes = getJson(`${BASE_URL}/rooms`);
-  if (roomsRes.status === 200 && roomsRes.json().length > 0) {
-    roomId = roomsRes.json()[0].id;
-  } else {
-    const res = postJson(`${BASE_URL}/rooms`, {
-      name: `Res Seed Room ${Date.now()}`,
-      capacity: 2,
-      price_per_night: 99.99,
-    });
-    if (res.status !== 201) {
-      throw new Error(`setup POST /rooms -> ${res.status}: ${res.body}`);
-    }
-    roomId = res.json().id;
+  const roomRes = postJson(`${BASE_URL}/rooms`, {
+    name: `Res Seed Room ${Date.now()}`,
+    capacity: 2,
+    price_per_night: 99.99,
+  });
+  if (roomRes.status !== 201) {
+    throw new Error(`setup POST /rooms -> ${roomRes.status}: ${roomRes.body}`);
   }
 
-  return { userId, roomId, maxVus };
+  return { userId, roomId: roomRes.json().id, maxVus };
 }
 
 export default function (data) {
   const offset = __ITER * data.maxVus + (__VU - 1);
-  const check_in = isoDateFromOffset(offset);
-  const check_out = isoDateFromOffset(offset + 1);
+  const base = Date.now() + offset * DAY_MS;
+  const check_in = new Date(base).toISOString().slice(0, 10);
+  const check_out = new Date(base + DAY_MS).toISOString().slice(0, 10);
 
   const response = postJson(
     `${BASE_URL}/reservations`,
