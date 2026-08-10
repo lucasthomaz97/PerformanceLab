@@ -7,9 +7,9 @@ export function loadOptions({ setupTimeout } = {}) {
   const options = {
     scenarios: optionsScenarios(resolveScenarioName()),
     thresholds: {
-      http_req_failed: [{ threshold: `rate<${ERROR_RATE}`, abortOnFail: false }],
-      http_req_duration: [{ threshold: `p(95)<${P95_MS}`, abortOnFail: false }],
-      http_req_waiting: [{ threshold: `p(95)<${P95_MS}`, abortOnFail: false }],
+      'http_req_failed{kind:load}': [{ threshold: `rate<${ERROR_RATE}`, abortOnFail: false }],
+      'http_req_duration{kind:load}': [{ threshold: `p(95)<${P95_MS}`, abortOnFail: false }],
+      'http_req_waiting{kind:load}': [{ threshold: `p(95)<${P95_MS}`, abortOnFail: false }],
     },
   };
 

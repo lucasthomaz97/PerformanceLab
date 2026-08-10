@@ -1,19 +1,13 @@
 import { check } from 'k6';
-import { getJson, postJson, checkListFields, logFailure, parseBody, sleepBetween } from '../../helpers/request_helpers.js';
+import { getJson, checkListFields, logFailure, parseBody, sleepBetween } from '../../helpers/request_helpers.js';
 import { loadOptions } from '../../helpers/options_helpers.js';
+import { ensureOneIfEmpty } from '../../helpers/seed_helpers.js';
 import { BASE_URL } from '../../helpers/config.js';
 
 export const options = loadOptions();
 
 export function setup() {
-  const res = getJson(`${BASE_URL}/rooms`);
-  if (res.status === 200 && res.json().length === 0) {
-    postJson(`${BASE_URL}/rooms`, {
-      name: 'Seed Room',
-      capacity: 2,
-      price_per_night: 99.99,
-    });
-  }
+  ensureOneIfEmpty('rooms');
 }
 
 export default function () {

@@ -1,20 +1,13 @@
 import { check } from 'k6';
-import { getJson, postJson, nextIdFromVus, logFailure, parseBody, sleepBetween } from '../../helpers/request_helpers.js';
+import { getJson, nextIdFromVus, logFailure, parseBody, sleepBetween } from '../../helpers/request_helpers.js';
 import { loadOptions } from '../../helpers/options_helpers.js';
-import { BASE_URL, RUN_ID } from '../../helpers/config.js';
+import { ensureRows } from '../../helpers/seed_helpers.js';
+import { BASE_URL } from '../../helpers/config.js';
 
 export const options = loadOptions();
 
 export function setup() {
-  const res = getJson(`${BASE_URL}/users`);
-  const count = res.status === 200 ? res.json().length : 0;
-  if (count >= 10) return;
-  for (let i = count; i < 10; i++) {
-    postJson(`${BASE_URL}/users`, {
-      name: `Seed User ${i}`,
-      email: `seed-${RUN_ID}-${i}@example.com`,
-    });
-  }
+  ensureRows('users', 10, 'Seed User');
 }
 
 export default function () {
