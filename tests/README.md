@@ -27,7 +27,7 @@ tests/
 │   │   ├── options_helpers.js         # loadOptions() + env-tunable thresholds
 │   │   ├── request_helpers.js         # HTTP verb wrappers, logFailure, parseBody, sleepBetween, checkListFields
 │   │   ├── scenarios_helpers.js       # shared smoke/load/staircase/soak/spike profiles
-│   │   └── seed_helpers.js     # seed API route (seedViaRoute, seedPool, resolveSeedKey)
+│   │   └── seed_helpers.js     # seed API route (seedViaRoute, seedPool, resolveSeedKey) + business-route seeders (ensureOneIfEmpty, ensureRows, seedReservationGraph)
 │   └── load/
 │       ├── users/             # one k6 script per HTTP operation
 │       ├── rooms/
@@ -305,67 +305,61 @@ Load tests are **k6** scripts (not pytest). They target a running server and are
 
 Requires [k6](https://k6.io/docs/getting-started/installation/) installed (it is not a Python dependency). The server must be running first (e.g. `uv run uvicorn api.main:app`).
 
+Run any script as-is to use its default `load` profile:
+
 ```bash
-# Default profile (load)
-k6 run tests/performance/load/users/get_users.js
+# users
+k6 run tests/performance/load/users/post_users.js
+k6 run tests/performance/load/users/get_users.js                 # list (seeds 1 row if the list is empty)
+k6 run tests/performance/load/users/get_user_by_id.js            # get (id derived from __VU last digit, 0 -> 10)
+k6 run tests/performance/load/users/put_user_by_id.js            # update (id derived from __VU last digit, 0 -> 10)
+k6 run tests/performance/load/users/delete_user.js               # delete from a pool created via POST /seed/users in setup()
 
-# Get a user by id (id derived from __VU last digit, 0 -> 10)
-k6 run tests/performance/load/users/get_user_by_id.js
+# rooms (same operations, under rooms/)
+k6 run tests/performance/load/rooms/post_rooms.js
+k6 run tests/performance/load/rooms/get_rooms.js                 # list (seeds 1 row if the list is empty)
+k6 run tests/performance/load/rooms/get_room_by_id.js            # get (id derived from __VU last digit, 0 -> 10)
+k6 run tests/performance/load/rooms/put_room_by_id.js            # update (id derived from __VU last digit, 0 -> 10)
+k6 run tests/performance/load/rooms/delete_room.js               # soft-delete from a pool created via POST /seed/rooms in setup()
 
-# Update a user by id (id derived from __VU last digit, 0 -> 10)
-k6 run tests/performance/load/users/put_user_by_id.js
+# reservations
+k6 run tests/performance/load/reservations/post_reservations.js  # create (unique future date windows per iteration to avoid 409s)
+k6 run tests/performance/load/reservations/get_user_reservations.js  # list a user's reservations (seeds >=10 users + 1 each)
+k6 run tests/performance/load/reservations/get_room_reservations.js  # list a room's reservations (seeds >=10 rooms + 1 each)
+k6 run tests/performance/load/reservations/cancel_reservation.js  # cancel from a pool created via POST /seed/reservations in setup()
+```
 
-# Delete users from a pool created via the /seed/users route in setup()
-k6 run tests/performance/load/users/delete_user.js
+Every script follows the same shape — `k6 run <script> [options]`. All parameters are optional and can be combined:
 
-# Override the delete seed pool size (otherwise computed from the profile)
-k6 run tests/performance/load/users/delete_user.js -e K6_DELETE_POOL_SIZE=5000
+| Parameter | Purpose | Example |
+| --------- | ------- | ------- |
+| `-e K6_SCENARIO=<name>` | Load profile: `smoke`, `load`, `staircase`, `soak`, `spike`, or `all` | `-e K6_SCENARIO=staircase` |
+| `-e BASE_URL=<url>` | Target a different server | `-e BASE_URL=http://localhost:8000` |
+| `-e K6_SOAK_DURATION=<d>` | Hold time for the `soak` profile | `-e K6_SOAK_DURATION=15m` |
+| `-e K6_DELETE_POOL_SIZE=<n>` | Override the delete/cancel seed pool (otherwise computed from the profile) | `-e K6_DELETE_POOL_SIZE=5000` |
+| `-e SEED_API_KEY=<key>` | Override the seed-route auth key (default read from `.env`) | `-e SEED_API_KEY=<value>` |
+| `-e K6_P95_MS=<n>` | Relax the p95 latency threshold | `-e K6_P95_MS=1000` |
+| `-e K6_ERROR_RATE=<f>` | Relax the error-rate threshold | `-e K6_ERROR_RATE=0.05` |
+| `--out json=<file>` | Export results for analysis | `--out json=results.json` |
+| `--vus <n> --duration <d>` | Quick ad-hoc run (overrides the scenario config) | `--vus 1 --duration 1s` |
 
-# Pick a profile and target
-k6 run tests/performance/load/users/post_users.js \
-  -e K6_SCENARIO=staircase \
-  -e BASE_URL=http://localhost:8000
+Combined examples:
+
+```bash
+# Pick a profile and a target server
+k6 run tests/performance/load/users/post_users.js -e K6_SCENARIO=staircase -e BASE_URL=http://localhost:8000
 
 # Soak with a custom hold duration
 k6 run tests/performance/load/users/get_users.js -e K6_SCENARIO=soak -e K6_SOAK_DURATION=15m
 
+# Relaxed thresholds for a slow CI box
+k6 run tests/performance/load/users/get_users.js -e K6_SCENARIO=soak -e K6_P95_MS=1000 -e K6_ERROR_RATE=0.05
+
+# One-second sanity check (overrides the load profile)
+k6 run --vus 1 --duration 1s tests/performance/load/users/delete_user.js
+
 # Export results for analysis
 k6 run tests/performance/load/users/get_users.js --out json=results.json
-```
-
-Rooms overload every `users` counterpart with a `rooms/` folder:
-
-```bash
-# Create rooms (name includes RUN_ID to stay unique)
-k6 run tests/performance/load/rooms/post_rooms.js
-
-# List rooms (seeds 1 room in setup() if the list is empty)
-k6 run tests/performance/load/rooms/get_rooms.js
-
-# Get a room by id (id derived from __VU last digit, 0 -> 10)
-k6 run tests/performance/load/rooms/get_room_by_id.js
-
-# Update a room by id (id derived from __VU last digit, 0 -> 10)
-k6 run tests/performance/load/rooms/put_room_by_id.js
-
-# Delete rooms (seeds a soft-delete pool via POST /seed/rooms in setup())
-k6 run tests/performance/load/rooms/delete_room.js
-```
-
-Reservations live under `tests/performance/load/reservations/`:
-
-```bash
-# Create reservations (unique future date windows per iteration to avoid 409s)
-k6 run tests/performance/load/reservations/post_reservations.js
-
-# List a user's reservations (seeds ≥10 users + 1 reservation each in setup())
-k6 run tests/performance/load/reservations/get_user_reservations.js
-
-# List a room's reservations (seeds ≥10 rooms + 1 reservation each in setup())
-k6 run tests/performance/load/reservations/get_room_reservations.js
-
-# Cancel reservations from a pool created via POST /seed/reservations in setup()
-k6 run tests/performance/load/reservations/cancel_reservation.js
 ```
 
 The scripts share the helpers in `tests/performance/helpers/`:
@@ -374,7 +368,7 @@ The scripts share the helpers in `tests/performance/helpers/`:
 - `request_helpers.js` — `postJson`/`putJson`/`patchJson`/`getJson`/`delJson` (embed the `Content-Type` header), `logFailure`, `parseBody`, `sleepBetween`, `nextIdFromVus`, `checkListFields`
 - `config.js` — `BASE_URL`, `RUN_ID`, `SCENARIO`, `DAY_MS` and `isoDateFromOffset(offsetDays)` (shared per-file preamble)
 - `options_helpers.js` — `loadOptions({ setupTimeout })` builds the scenarios + thresholds block every script used to repeat; thresholds are env-tunable (see [Thresholds](#thresholds))
-- `seed_helpers.js` — encapsulates the internal seed API (`seedViaRoute`, `sliceForVus`, `seedPool`, `resolveSeedKey`); the delete/cancel tests' `setup()` is just `return seedPool('rooms' | 'users' | 'reservations')`
+- `seed_helpers.js` — encapsulates the internal seed API (`seedViaRoute`, `sliceForVus`, `seedPool`, `resolveSeedKey`); the delete/cancel tests' `setup()` is just `return seedPool('rooms' | 'users' | 'reservations')`. Also provides business-route seeders for the read/update tests: `ensureOneIfEmpty(kind)` (get_rooms/get_users), `ensureRows(kind, count, prefix)` (get/put_*_by_id), and `seedReservationGraph(kind, count)` (get_user_reservations/get_room_reservations)
 - `pool_helpers.js` — `parseDuration`, `computePoolConfig` (seed-pool sizing)
 - `scenarios_helpers.js` — all profiles are centralized so every route test runs identical load shapes
 
@@ -427,6 +421,8 @@ All three thresholds use `abortOnFail: false` so the test **records** saturation
 - `http_req_failed`: `rate < 0.01`
 - `http_req_duration`: `p(95) < 500`
 - `http_req_waiting`: `p(95) < 500` — time-to-first-byte, the metric that exposes DB-pool queueing
+
+Thresholds are scoped with the `kind:load` tag, so they evaluate only the requests hitting the route under test. Setup/seed requests (`kind:seed`, e.g. the bulk `POST /seed/{kind}` pool insert) are excluded — otherwise the one-shot seed latency would dominate `p(95)` on short runs (e.g. `k6 run --vus 1 --duration 1s delete_user.js`).
 
 Thresholds are centralized in `helpers/options_helpers.js` (`loadOptions()`) and can be relaxed per run without editing files — e.g. a soak on a slow CI box:
 
@@ -483,7 +479,7 @@ tests/
 │   │   ├── options_helpers.js         # loadOptions() + thresholds configuráveis via env
 │   │   ├── request_helpers.js         # wrappers HTTP, logFailure, parseBody, sleepBetween, checkListFields
 │   │   ├── scenarios_helpers.js       # perfils compartilhados smoke/load/staircase/soak/spike
-│   │   └── seed_helpers.js     # rota de seed (seedViaRoute, seedPool, resolveSeedKey)
+│   │   └── seed_helpers.js     # rota de seed (seedViaRoute, seedPool, resolveSeedKey) + seeders por rota de negócio (ensureOneIfEmpty, ensureRows, seedReservationGraph)
 │   └── load/
 │       ├── users/             # um script k6 por operação HTTP
 │       ├── rooms/
@@ -761,67 +757,61 @@ Os testes de carga são scripts **k6** (não pytest). Eles apontam para um servi
 
 Requer [k6](https://k6.io/docs/getting-started/installation/) instalado (não é uma dependência Python). O servidor deve estar em execução primeiro (ex.: `uv run uvicorn api.main:app`).
 
+Execute qualquer script como está para usar o perfil `load` padrão:
+
 ```bash
-# Perfil padrão (load)
-k6 run tests/performance/load/users/get_users.js
+# users
+k6 run tests/performance/load/users/post_users.js
+k6 run tests/performance/load/users/get_users.js                 # listar (faz seed de 1 linha se a lista estiver vazia)
+k6 run tests/performance/load/users/get_user_by_id.js            # obter (id derivado do último dígito de __VU, 0 -> 10)
+k6 run tests/performance/load/users/put_user_by_id.js            # atualizar (id derivado do último dígito de __VU, 0 -> 10)
+k6 run tests/performance/load/users/delete_user.js               # excluir de um pool criado via POST /seed/users no setup()
 
-# Obter um usuário por id (id derivado do último dígito de __VU, 0 -> 10)
-k6 run tests/performance/load/users/get_user_by_id.js
+# rooms (mesmas operações, em rooms/)
+k6 run tests/performance/load/rooms/post_rooms.js
+k6 run tests/performance/load/rooms/get_rooms.js                 # listar (faz seed de 1 linha se a lista estiver vazia)
+k6 run tests/performance/load/rooms/get_room_by_id.js            # obter (id derivado do último dígito de __VU, 0 -> 10)
+k6 run tests/performance/load/rooms/put_room_by_id.js            # atualizar (id derivado do último dígito de __VU, 0 -> 10)
+k6 run tests/performance/load/rooms/delete_room.js               # soft-delete de um pool criado via POST /seed/rooms no setup()
 
-# Atualizar um usuário por id (id derivado do último dígito de __VU, 0 -> 10)
-k6 run tests/performance/load/users/put_user_by_id.js
+# reservations
+k6 run tests/performance/load/reservations/post_reservations.js  # criar (janelas de datas futuras únicas por iteração para evitar 409)
+k6 run tests/performance/load/reservations/get_user_reservations.js  # listar reservas de um usuário (faz seed de >=10 usuários + 1 cada)
+k6 run tests/performance/load/reservations/get_room_reservations.js  # listar reservas de uma sala (faz seed de >=10 salas + 1 cada)
+k6 run tests/performance/load/reservations/cancel_reservation.js  # cancelar de um pool criado via POST /seed/reservations no setup()
+```
 
-# Excluir usuários de um pool criado via rota /seed/users no setup()
-k6 run tests/performance/load/users/delete_user.js
+Todo script segue o mesmo formato — `k6 run <script> [opções]`. Todos os parâmetros são opcionais e podem ser combinados:
 
-# Sobrescrever o tamanho do pool de exclusão (caso contrário, calculado pelo perfil)
-k6 run tests/performance/load/users/delete_user.js -e K6_DELETE_POOL_SIZE=5000
+| Parâmetro | Finalidade | Exemplo |
+| --------- | ---------- | ------- |
+| `-e K6_SCENARIO=<nome>` | Perfil de carga: `smoke`, `load`, `staircase`, `soak`, `spike` ou `all` | `-e K6_SCENARIO=staircase` |
+| `-e BASE_URL=<url>` | Apontar para outro servidor | `-e BASE_URL=http://localhost:8000` |
+| `-e K6_SOAK_DURATION=<d>` | Tempo de sustentação do perfil `soak` | `-e K6_SOAK_DURATION=15m` |
+| `-e K6_DELETE_POOL_SIZE=<n>` | Sobrescrever o pool de seed dos testes de delete/cancel (caso contrário, calculado pelo perfil) | `-e K6_DELETE_POOL_SIZE=5000` |
+| `-e SEED_API_KEY=<chave>` | Sobrescrever a chave de auth da rota de seed (padrão lido do `.env`) | `-e SEED_API_KEY=<valor>` |
+| `-e K6_P95_MS=<n>` | Relaxar o limiar de latência p95 | `-e K6_P95_MS=1000` |
+| `-e K6_ERROR_RATE=<f>` | Relaxar o limiar de taxa de erro | `-e K6_ERROR_RATE=0.05` |
+| `--out json=<arquivo>` | Exportar resultados para análise | `--out json=results.json` |
+| `--vus <n> --duration <d>` | Execução rápida ad-hoc (sobrescreve a configuração de cenários) | `--vus 1 --duration 1s` |
 
+Exemplos combinados:
+
+```bash
 # Escolher um perfil e um alvo
-k6 run tests/performance/load/users/post_users.js \
-  -e K6_SCENARIO=staircase \
-  -e BASE_URL=http://localhost:8000
+k6 run tests/performance/load/users/post_users.js -e K6_SCENARIO=staircase -e BASE_URL=http://localhost:8000
 
 # Soak com duração personalizada
 k6 run tests/performance/load/users/get_users.js -e K6_SCENARIO=soak -e K6_SOAK_DURATION=15m
 
+# Limiares relaxados para uma máquina lenta
+k6 run tests/performance/load/users/get_users.js -e K6_SCENARIO=soak -e K6_P95_MS=1000 -e K6_ERROR_RATE=0.05
+
+# Verificação rápida de 1 segundo (sobrescreve o perfil de carga)
+k6 run --vus 1 --duration 1s tests/performance/load/users/delete_user.js
+
 # Exportar resultados para análise
 k6 run tests/performance/load/users/get_users.js --out json=results.json
-```
-
-Salas espelham cada contraparte de `users` com uma pasta `rooms/`:
-
-```bash
-# Criar salas (o nome inclui RUN_ID para permanecer único)
-k6 run tests/performance/load/rooms/post_rooms.js
-
-# Listar salas (faz seed de 1 sala no setup() se a lista estiver vazia)
-k6 run tests/performance/load/rooms/get_rooms.js
-
-# Obter uma sala por id (id derivado do último dígito de __VU, 0 -> 10)
-k6 run tests/performance/load/rooms/get_room_by_id.js
-
-# Atualizar uma sala por id (id derivado do último dígito de __VU, 0 -> 10)
-k6 run tests/performance/load/rooms/put_room_by_id.js
-
-# Excluir salas (faz seed de um pool de soft-delete via POST /seed/rooms no setup())
-k6 run tests/performance/load/rooms/delete_room.js
-```
-
-Reservas ficam em `tests/performance/load/reservations/`:
-
-```bash
-# Criar reservas (janelas de datas futuras únicas por iteração para evitar 409)
-k6 run tests/performance/load/reservations/post_reservations.js
-
-# Listar reservas de um usuário (faz seed de ≥10 usuários + 1 reserva cada no setup())
-k6 run tests/performance/load/reservations/get_user_reservations.js
-
-# Listar reservas de uma sala (faz seed de ≥10 salas + 1 reserva cada no setup())
-k6 run tests/performance/load/reservations/get_room_reservations.js
-
-# Cancelar reservas de um pool criado via POST /seed/reservations no setup()
-k6 run tests/performance/load/reservations/cancel_reservation.js
 ```
 
 Os scripts compartilham os helpers em `tests/performance/helpers/`:
@@ -830,7 +820,7 @@ Os scripts compartilham os helpers em `tests/performance/helpers/`:
 - `request_helpers.js` — `postJson`/`putJson`/`patchJson`/`getJson`/`delJson` (embutem o header `Content-Type`), `logFailure`, `parseBody`, `sleepBetween`, `nextIdFromVus`, `checkListFields`
 - `config.js` — `BASE_URL`, `RUN_ID`, `SCENARIO`, `DAY_MS` e `isoDateFromOffset(offsetDays)` (preâmbulo compartilhado entre scripts)
 - `options_helpers.js` — `loadOptions({ setupTimeout })` monta o bloco de cenários + thresholds que todo script repetia; thresholds são configuráveis via env (veja [Thresholds](#thresholds))
-- `seed_helpers.js` — encapsula a API interna de seed (`seedViaRoute`, `sliceForVus`, `seedPool`, `resolveSeedKey`); o `setup()` dos testes de delete/cancel vira `return seedPool('rooms' | 'users' | 'reservations')`
+- `seed_helpers.js` — encapsula a API interna de seed (`seedViaRoute`, `sliceForVus`, `seedPool`, `resolveSeedKey`); o `setup()` dos testes de delete/cancel vira `return seedPool('rooms' | 'users' | 'reservations')`. Também provê seeders por rota de negócio para os testes de leitura/atualização: `ensureOneIfEmpty(kind)` (get_rooms/get_users), `ensureRows(kind, count, prefix)` (get/put_*_by_id) e `seedReservationGraph(kind, count)` (get_user_reservations/get_room_reservations)
 - `pool_helpers.js` — `parseDuration`, `computePoolConfig` (dimensionamento do seed pool)
 - `scenarios_helpers.js` — todos os perfis estão centralizados para que cada teste de rota execute formas de carga idênticas
 
@@ -883,6 +873,8 @@ Todos os três limiares usam `abortOnFail: false` para que o teste **registre** 
 - `http_req_failed`: `rate < 0.01`
 - `http_req_duration`: `p(95) < 500`
 - `http_req_waiting`: `p(95) < 500` — time-to-first-byte, a métrica que expõe o enfileiramento no pool do DB
+
+Os limiares são filtrados pela tag `kind:load`, avaliando apenas as requisições da rota sob teste. Requisições de setup/seed (`kind:seed`, ex.: o insert em massa `POST /seed/{kind}`) ficam de fora — caso contrário a latência única do seed dominaria o `p(95)` em execuções curtas (ex.: `k6 run --vus 1 --duration 1s delete_user.js`).
 
 Os limiares são centralizados em `helpers/options_helpers.js` (`loadOptions()`) e podem ser relaxados por execução sem editar arquivos — ex.: soak numa máquina lenta:
 
