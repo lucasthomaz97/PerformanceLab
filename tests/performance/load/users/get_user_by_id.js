@@ -1,17 +1,20 @@
 import { check } from 'k6';
 import { getJson, nextIdFromVus, logFailure, parseBody, sleepBetween } from '../../helpers/request_helpers.js';
 import { loadOptions } from '../../helpers/options_helpers.js';
+import { byIdSeedCount } from '../../helpers/pool_helpers.js';
 import { ensureRows } from '../../helpers/seed_helpers.js';
-import { BASE_URL } from '../../helpers/config.js';
+import { BASE_URL, SCENARIO } from '../../helpers/config.js';
 
 export const options = loadOptions();
 
 export function setup() {
-  ensureRows('users', 10, 'Seed User');
+  const count = byIdSeedCount(SCENARIO);
+  ensureRows('users', count, 'Seed User');
+  return { count };
 }
 
-export default function () {
-  const id = nextIdFromVus(10);
+export default function (data) {
+  const id = nextIdFromVus(data.count);
 
   const response = getJson(`${BASE_URL}/users/${id}`, { endpoint: `GET /users/${id}` });
   logFailure('GET', `${BASE_URL}/users/${id}`, response);

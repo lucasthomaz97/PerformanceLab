@@ -23,7 +23,7 @@ tests/
 │   ├── helpers/
 │   │   ├── config.js               # BASE_URL, RUN_ID, SCENARIO, DAY_MS, isoDateFromOffset
 │   │   ├── general_helpers.js         # randomIntBetween shared helper
-│   │   ├── pool_helpers.js  # parseDuration, computePoolConfig (seed-pool sizing)
+│   │   ├── pool_helpers.js  # parseDuration, computePoolConfig, byIdSeedCount (seed-pool + by-id sizing)
 │   │   ├── options_helpers.js         # loadOptions() + env-tunable thresholds
 │   │   ├── request_helpers.js         # HTTP verb wrappers, logFailure, parseBody, sleepBetween, checkListFields
 │   │   ├── scenarios_helpers.js       # shared smoke/load/staircase/soak/spike/average_load/stress/breakpoint profiles
@@ -311,15 +311,15 @@ Run any script as-is to use its default `load` profile:
 # users
 k6 run tests/performance/load/users/post_users.js
 k6 run tests/performance/load/users/get_users.js                 # list (seeds 1 row if the list is empty)
-k6 run tests/performance/load/users/get_user_by_id.js            # get (id derived from __VU last digit, 0 -> 10)
-k6 run tests/performance/load/users/put_user_by_id.js            # update (id derived from __VU last digit, 0 -> 10)
+k6 run tests/performance/load/users/get_user_by_id.js            # get (id picked from a pool sized to the scenario's max VUs)
+k6 run tests/performance/load/users/put_user_by_id.js            # update (id picked from a pool sized to the scenario's max VUs)
 k6 run tests/performance/load/users/delete_user.js               # delete from a pool created via POST /seed/users in setup()
 
 # rooms (same operations, under rooms/)
 k6 run tests/performance/load/rooms/post_rooms.js
 k6 run tests/performance/load/rooms/get_rooms.js                 # list (seeds 1 row if the list is empty)
-k6 run tests/performance/load/rooms/get_room_by_id.js            # get (id derived from __VU last digit, 0 -> 10)
-k6 run tests/performance/load/rooms/put_room_by_id.js            # update (id derived from __VU last digit, 0 -> 10)
+k6 run tests/performance/load/rooms/get_room_by_id.js            # get (id picked from a pool sized to the scenario's max VUs)
+k6 run tests/performance/load/rooms/put_room_by_id.js            # update (id picked from a pool sized to the scenario's max VUs)
 k6 run tests/performance/load/rooms/delete_room.js               # soft-delete from a pool created via POST /seed/rooms in setup()
 
 # reservations
@@ -343,6 +343,7 @@ Every script follows the same shape — `k6 run <script> [options]`. All paramet
 | `-e SEED_API_KEY=<key>` | Override the seed-route auth key (default read from `.env`) | `-e SEED_API_KEY=<value>` |
 | `-e K6_P95_MS=<n>` | Relax the p95 latency threshold | `-e K6_P95_MS=1000` |
 | `-e K6_ERROR_RATE=<f>` | Relax the error-rate threshold | `-e K6_ERROR_RATE=0.05` |
+| `-e K6_FAILURE_LOG_LIMIT=<n>` | Log the body of only the first N failed responses (default 20) | `-e K6_FAILURE_LOG_LIMIT=50` |
 | `--out json=<file>` | Export results for analysis | `--out json=results.json` |
 | `--vus <n> --duration <d>` | Quick ad-hoc run (overrides the scenario config) | `--vus 1 --duration 1s` |
 
@@ -372,7 +373,7 @@ The scripts share the helpers in `tests/performance/helpers/`:
 - `config.js` — `BASE_URL`, `RUN_ID`, `SCENARIO`, `DAY_MS` and `isoDateFromOffset(offsetDays)` (shared per-file preamble)
 - `options_helpers.js` — `loadOptions({ setupTimeout })` builds the scenarios + thresholds block every script used to repeat; thresholds are env-tunable (see [Thresholds](#thresholds))
 - `seed_helpers.js` — encapsulates the internal seed API (`seedViaRoute`, `sliceForVus`, `seedPool`, `resolveSeedKey`); the delete/cancel tests' `setup()` is just `return seedPool('rooms' | 'users' | 'reservations')`. Also provides business-route seeders for the read/update tests: `ensureOneIfEmpty(kind)` (get_rooms/get_users), `ensureRows(kind, count, prefix)` (get/put_*_by_id), and `seedReservationGraph(kind, count)` (get_user_reservations/get_room_reservations)
-- `pool_helpers.js` — `parseDuration`, `computePoolConfig` (seed-pool sizing)
+- `pool_helpers.js` — `parseDuration`, `computePoolConfig`, `byIdSeedCount` (seed-pool + by-id sizing)
 - `scenarios_helpers.js` — all profiles are centralized so every route test runs identical load shapes
 
 ### Profiles
@@ -440,7 +441,7 @@ k6 run tests/performance/load/users/get_users.js -e K6_SCENARIO=soak -e K6_P95_M
 
 ### Test-ordering caveat
 
-`delete_user.js` permanently removes users, and `delete_room.js` soft-deletes rooms (hidden from `GET /rooms`). The by-id tests (`get_user_by_id`, `get_room_by_id`, `put_user_by_id`, `put_room_by_id`) assume ids **1–10** exist, so running a delete/cancel test first will produce 404s and threshold breaches on later by-id runs. If the load-test DB is not disposable, reseed (or re-run a create/list test) before by-id runs.
+`delete_user.js` permanently removes users, and `delete_room.js` soft-deletes rooms (hidden from `GET /rooms`). The by-id tests (`get_user_by_id`, `get_room_by_id`, `put_user_by_id`, `put_room_by_id`) assume the first `max(10, maxVUs)` ids exist — the pool scales with the active scenario — so running a delete/cancel test first will produce 404s and threshold breaches on later by-id runs. If the load-test DB is not disposable, reseed (or re-run a create/list test) before by-id runs.
 
 ### How to read the knee
 
@@ -483,7 +484,7 @@ tests/
 │   ├── helpers/
 │   │   ├── config.js               # BASE_URL, RUN_ID, SCENARIO, DAY_MS, isoDateFromOffset
 │   │   ├── general_helpers.js         # helper compartilhado randomIntBetween
-│   │   ├── pool_helpers.js  # parseDuration, computePoolConfig (dimensionamento do seed pool)
+│   │   ├── pool_helpers.js  # parseDuration, computePoolConfig, byIdSeedCount (dimensionamento do seed pool e dos testes por id)
 │   │   ├── options_helpers.js         # loadOptions() + thresholds configuráveis via env
 │   │   ├── request_helpers.js         # wrappers HTTP, logFailure, parseBody, sleepBetween, checkListFields
 │   │   ├── scenarios_helpers.js       # perfils compartilhados smoke/load/staircase/soak/spike/average_load/stress/breakpoint
@@ -771,15 +772,15 @@ Execute qualquer script como está para usar o perfil `load` padrão:
 # users
 k6 run tests/performance/load/users/post_users.js
 k6 run tests/performance/load/users/get_users.js                 # listar (faz seed de 1 linha se a lista estiver vazia)
-k6 run tests/performance/load/users/get_user_by_id.js            # obter (id derivado do último dígito de __VU, 0 -> 10)
-k6 run tests/performance/load/users/put_user_by_id.js            # atualizar (id derivado do último dígito de __VU, 0 -> 10)
+k6 run tests/performance/load/users/get_user_by_id.js            # obter (id de um pool dimensionado para o max VUs do cenário)
+k6 run tests/performance/load/users/put_user_by_id.js            # atualizar (id de um pool dimensionado para o max VUs do cenário)
 k6 run tests/performance/load/users/delete_user.js               # excluir de um pool criado via POST /seed/users no setup()
 
 # rooms (mesmas operações, em rooms/)
 k6 run tests/performance/load/rooms/post_rooms.js
 k6 run tests/performance/load/rooms/get_rooms.js                 # listar (faz seed de 1 linha se a lista estiver vazia)
-k6 run tests/performance/load/rooms/get_room_by_id.js            # obter (id derivado do último dígito de __VU, 0 -> 10)
-k6 run tests/performance/load/rooms/put_room_by_id.js            # atualizar (id derivado do último dígito de __VU, 0 -> 10)
+k6 run tests/performance/load/rooms/get_room_by_id.js            # obter (id de um pool dimensionado para o max VUs do cenário)
+k6 run tests/performance/load/rooms/put_room_by_id.js            # atualizar (id de um pool dimensionado para o max VUs do cenário)
 k6 run tests/performance/load/rooms/delete_room.js               # soft-delete de um pool criado via POST /seed/rooms no setup()
 
 # reservations
@@ -803,6 +804,7 @@ Todo script segue o mesmo formato — `k6 run <script> [opções]`. Todos os par
 | `-e SEED_API_KEY=<chave>` | Sobrescrever a chave de auth da rota de seed (padrão lido do `.env`) | `-e SEED_API_KEY=<valor>` |
 | `-e K6_P95_MS=<n>` | Relaxar o limiar de latência p95 | `-e K6_P95_MS=1000` |
 | `-e K6_ERROR_RATE=<f>` | Relaxar o limiar de taxa de erro | `-e K6_ERROR_RATE=0.05` |
+| `-e K6_FAILURE_LOG_LIMIT=<n>` | Logar o corpo apenas das N primeiras respostas com falha (padrão 20) | `-e K6_FAILURE_LOG_LIMIT=50` |
 | `--out json=<arquivo>` | Exportar resultados para análise | `--out json=results.json` |
 | `--vus <n> --duration <d>` | Execução rápida ad-hoc (sobrescreve a configuração de cenários) | `--vus 1 --duration 1s` |
 
@@ -832,7 +834,7 @@ Os scripts compartilham os helpers em `tests/performance/helpers/`:
 - `config.js` — `BASE_URL`, `RUN_ID`, `SCENARIO`, `DAY_MS` e `isoDateFromOffset(offsetDays)` (preâmbulo compartilhado entre scripts)
 - `options_helpers.js` — `loadOptions({ setupTimeout })` monta o bloco de cenários + thresholds que todo script repetia; thresholds são configuráveis via env (veja [Thresholds](#thresholds))
 - `seed_helpers.js` — encapsula a API interna de seed (`seedViaRoute`, `sliceForVus`, `seedPool`, `resolveSeedKey`); o `setup()` dos testes de delete/cancel vira `return seedPool('rooms' | 'users' | 'reservations')`. Também provê seeders por rota de negócio para os testes de leitura/atualização: `ensureOneIfEmpty(kind)` (get_rooms/get_users), `ensureRows(kind, count, prefix)` (get/put_*_by_id) e `seedReservationGraph(kind, count)` (get_user_reservations/get_room_reservations)
-- `pool_helpers.js` — `parseDuration`, `computePoolConfig` (dimensionamento do seed pool)
+- `pool_helpers.js` — `parseDuration`, `computePoolConfig`, `byIdSeedCount` (dimensionamento do seed pool e dos testes por id)
 - `scenarios_helpers.js` — todos os perfis estão centralizados para que cada teste de rota execute formas de carga idênticas
 
 ### Perfis
@@ -900,7 +902,7 @@ k6 run tests/performance/load/users/get_users.js -e K6_SCENARIO=soak -e K6_P95_M
 
 ### Caveat da ordem dos testes
 
-`delete_user.js` remove usuários permanentemente e `delete_room.js` aplica soft-delete em salas (ocultas do `GET /rooms`). Os testes por id (`get_user_by_id`, `get_room_by_id`, `put_user_by_id`, `put_room_by_id`) assumem que existem os ids **1–10**; rodar um teste de delete/cancel antes deles gera 404s e violações de limiar nos runs seguintes. Se o DB de carga não for descartável, faça novo seed (ou rode um teste de create/list) antes dos testes por id.
+`delete_user.js` remove usuários permanentemente e `delete_room.js` aplica soft-delete em salas (ocultas do `GET /rooms`). Os testes por id (`get_user_by_id`, `get_room_by_id`, `put_user_by_id`, `put_room_by_id`) assumem que existem os primeiros `max(10, maxVUs)` ids — o pool é dimensionado pelo cenário ativo —; rodar um teste de delete/cancel antes deles gera 404s e violações de limiar nos runs seguintes. Se o DB de carga não for descartável, faça novo seed (ou rode um teste de create/list) antes dos testes por id.
 
 ### Como ler o "knee"
 

@@ -1,17 +1,20 @@
 import { check } from 'k6';
-import { getJson, putJson, nextIdFromVus, logFailure, parseBody, sleepBetween } from '../../helpers/request_helpers.js';
+import { putJson, nextIdFromVus, logFailure, parseBody, sleepBetween } from '../../helpers/request_helpers.js';
 import { loadOptions } from '../../helpers/options_helpers.js';
+import { byIdSeedCount } from '../../helpers/pool_helpers.js';
 import { ensureRows } from '../../helpers/seed_helpers.js';
-import { BASE_URL, RUN_ID } from '../../helpers/config.js';
+import { BASE_URL, RUN_ID, SCENARIO } from '../../helpers/config.js';
 
 export const options = loadOptions();
 
 export function setup() {
-  ensureRows('rooms', 10, 'Seed Room');
+  const count = byIdSeedCount(SCENARIO);
+  ensureRows('rooms', count, 'Seed Room');
+  return { count };
 }
 
-export default function () {
-  const id = nextIdFromVus(10);
+export default function (data) {
+  const id = nextIdFromVus(data.count);
   const name = `Load Test Room ${RUN_ID}-${__VU}-${__ITER}`;
   const capacity = 4;
   const price_per_night = 199.99;

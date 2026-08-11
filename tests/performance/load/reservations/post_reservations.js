@@ -10,7 +10,7 @@ export const options = loadOptions();
 export function setup() {
   const { maxVus } = computePoolConfig(activeProfiles(SCENARIO));
 
-  const usersRes = getJson(`${BASE_URL}/users`);
+  const usersRes = getJson(`${BASE_URL}/users`, { kind: 'seed' });
   let userId;
   if (usersRes.status === 200 && usersRes.json().length > 0) {
     userId = usersRes.json()[0].id;
@@ -18,7 +18,7 @@ export function setup() {
     const res = postJson(`${BASE_URL}/users`, {
       name: 'Res Seed User',
       email: `seed-res-user-${Date.now()}@example.com`,
-    });
+    }, { kind: 'seed' });
     if (res.status !== 201) {
       throw new Error(`setup POST /users -> ${res.status}: ${res.body}`);
     }
@@ -29,7 +29,7 @@ export function setup() {
     name: `Res Seed Room ${Date.now()}`,
     capacity: 2,
     price_per_night: 99.99,
-  });
+  }, { kind: 'seed' });
   if (roomRes.status !== 201) {
     throw new Error(`setup POST /rooms -> ${roomRes.status}: ${roomRes.body}`);
   }

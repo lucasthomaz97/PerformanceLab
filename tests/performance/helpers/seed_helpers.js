@@ -82,7 +82,7 @@ function seedRow(kind, prefix, i) {
   const payload = kind === 'users'
     ? { name: `${prefix} ${i}`, email: `seed-${RUN_ID}-${i}@example.com` }
     : { name: `${prefix} ${RUN_ID}-${i}`, capacity: 2, price_per_night: 99.99 };
-  const res = postJson(`${BASE_URL}/${kind}`, payload);
+  const res = postJson(`${BASE_URL}/${kind}`, payload, { kind: 'seed' });
   if (res.status !== 201) {
     throw new Error(`setup POST /${kind} -> ${res.status}: ${res.body}`);
   }
@@ -90,14 +90,14 @@ function seedRow(kind, prefix, i) {
 }
 
 export function ensureOneIfEmpty(kind) {
-  const res = getJson(`${BASE_URL}/${kind}`);
+  const res = getJson(`${BASE_URL}/${kind}`, { kind: 'seed' });
   if (res.status === 200 && res.json().length === 0) {
     seedRow(kind, ONE_ROW_PREFIX[kind], 0);
   }
 }
 
 export function ensureRows(kind, count, prefix) {
-  const res = getJson(`${BASE_URL}/${kind}`);
+  const res = getJson(`${BASE_URL}/${kind}`, { kind: 'seed' });
   const existing = res.status === 200 ? res.json().length : 0;
   for (let i = existing; i < count; i++) {
     seedRow(kind, prefix, i);
@@ -112,7 +112,7 @@ export function seedReservationGraph(kind, count) {
   for (let i = 0; i < count; i++) {
     const res = postJson(`${BASE_URL}/${kind}`, kind === 'users'
       ? { name: `Res Seed ${manyPrefix} ${RUN_ID}-${i}`, email: `seed-res-${RUN_ID}-${i}@example.com` }
-      : { name: `Res Seed ${manyPrefix} ${RUN_ID}-${i}`, capacity: 2, price_per_night: 99.99 });
+      : { name: `Res Seed ${manyPrefix} ${RUN_ID}-${i}`, capacity: 2, price_per_night: 99.99 }, { kind: 'seed' });
     if (res.status !== 201) {
       throw new Error(`setup POST /${kind} -> ${res.status}: ${res.body}`);
     }
@@ -121,7 +121,7 @@ export function seedReservationGraph(kind, count) {
 
   const singleRes = postJson(`${BASE_URL}/${kind === 'users' ? 'rooms' : 'users'}`, kind === 'users'
     ? { name: `Res Seed ${singlePrefix} ${RUN_ID}`, capacity: 2, price_per_night: 99.99 }
-    : { name: `Res Seed ${singlePrefix} ${RUN_ID}`, email: `seed-res-${RUN_ID}@example.com` });
+    : { name: `Res Seed ${singlePrefix} ${RUN_ID}`, email: `seed-res-${RUN_ID}@example.com` }, { kind: 'seed' });
   if (singleRes.status !== 201) {
     throw new Error(`setup POST /${kind === 'users' ? 'rooms' : 'users'} -> ${singleRes.status}: ${singleRes.body}`);
   }
@@ -132,7 +132,7 @@ export function seedReservationGraph(kind, count) {
     const checkOut = isoDateFromOffset(i + 1);
     const res = postJson(`${BASE_URL}/reservations`, kind === 'users'
       ? { user_id: manyIds[i], room_id: singleId, check_in: checkIn, check_out: checkOut }
-      : { user_id: singleId, room_id: manyIds[i], check_in: checkIn, check_out: checkOut });
+      : { user_id: singleId, room_id: manyIds[i], check_in: checkIn, check_out: checkOut }, { kind: 'seed' });
     if (res.status !== 201) {
       throw new Error(`setup POST /reservations -> ${res.status}: ${res.body}`);
     }

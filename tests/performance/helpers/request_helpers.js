@@ -4,6 +4,10 @@ import { randomIntBetween } from './general_helpers.js';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json' };
 const LOAD_TAG = { kind: 'load' };
+const FAILURE_LOG_LIMIT = Number(__ENV.K6_FAILURE_LOG_LIMIT) || 20;
+let failuresLogged = 0;
+let failuresTotal = 0;
+let suppressionAnnounced = false;
 
 function stringifyBody(body) {
   return body === null || body === undefined ? null : JSON.stringify(body);
@@ -34,9 +38,25 @@ export function delJson(url, tags) {
 }
 
 export function logFailure(method, url, response) {
-  if (response.status >= 400) {
-    console.error(`${method} ${url} -> ${response.status}: ${response.body}`);
+  if (response.status < 400) {
+    return;
   }
+
+  failuresTotal += 1;
+
+  if (failuresLogged >= FAILURE_LOG_LIMIT) {
+    if (!suppressionAnnounced) {
+      suppressionAnnounced = true;
+      console.error(
+        `failure log limit reached (${FAILURE_LOG_LIMIT}); ` +
+        `suppressing further logs (${failuresTotal} total failures so far)`,
+      );
+    }
+    return;
+  }
+
+  failuresLogged += 1;
+  console.error(`${method} ${url} -> ${response.status}: ${response.body}`);
 }
 
 export function parseBody(response, expectedStatus, fallback) {

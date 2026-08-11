@@ -1,6 +1,12 @@
+import { activeProfiles } from './scenarios_helpers.js';
+
 const AVG_ITER_SECONDS = 1.0;
 const POOL_SAFETY = 1.2;
 const DELETE_POOL_OVERRIDE = __ENV.K6_DELETE_POOL_SIZE || 0;
+
+export function byIdSeedCount(name) {
+  return Math.max(10, computePoolConfig(activeProfiles(name)).maxVus);
+}
 
 export function parseDuration(duration) {
   const match = /^(\d+(?:\.\d+)?)([smh])$/.exec(duration);

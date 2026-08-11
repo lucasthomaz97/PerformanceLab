@@ -1,17 +1,20 @@
 import { check } from 'k6';
-import { getJson, putJson, nextIdFromVus, logFailure, parseBody, sleepBetween } from '../../helpers/request_helpers.js';
+import { putJson, nextIdFromVus, logFailure, parseBody, sleepBetween } from '../../helpers/request_helpers.js';
 import { loadOptions } from '../../helpers/options_helpers.js';
+import { byIdSeedCount } from '../../helpers/pool_helpers.js';
 import { ensureRows } from '../../helpers/seed_helpers.js';
-import { BASE_URL, RUN_ID } from '../../helpers/config.js';
+import { BASE_URL, RUN_ID, SCENARIO } from '../../helpers/config.js';
 
 export const options = loadOptions();
 
 export function setup() {
-  ensureRows('users', 10, 'Seed User');
+  const count = byIdSeedCount(SCENARIO);
+  ensureRows('users', count, 'Seed User');
+  return { count };
 }
 
-export default function () {
-  const id = nextIdFromVus(10);
+export default function (data) {
+  const id = nextIdFromVus(data.count);
   const name = `Load Test User ${__VU}-${__ITER}`;
   const email = `load_test_user-${RUN_ID}-${__VU}-${__ITER}@example.com`;
   const phone = '99999-9999';
