@@ -26,7 +26,7 @@ tests/
 │   │   ├── pool_helpers.js  # parseDuration, computePoolConfig (seed-pool sizing)
 │   │   ├── options_helpers.js         # loadOptions() + env-tunable thresholds
 │   │   ├── request_helpers.js         # HTTP verb wrappers, logFailure, parseBody, sleepBetween, checkListFields
-│   │   ├── scenarios_helpers.js       # shared smoke/load/staircase/soak/spike profiles
+│   │   ├── scenarios_helpers.js       # shared smoke/load/staircase/soak/spike/average_load/stress/breakpoint profiles
 │   │   └── seed_helpers.js     # seed API route (seedViaRoute, seedPool, resolveSeedKey) + business-route seeders (ensureOneIfEmpty, ensureRows, seedReservationGraph)
 │   └── load/
 │       ├── users/             # one k6 script per HTTP operation
@@ -333,9 +333,12 @@ Every script follows the same shape — `k6 run <script> [options]`. All paramet
 
 | Parameter | Purpose | Example |
 | --------- | ------- | ------- |
-| `-e K6_SCENARIO=<name>` | Load profile: `smoke`, `load`, `staircase`, `soak`, `spike`, or `all` | `-e K6_SCENARIO=staircase` |
+| `-e K6_SCENARIO=<name>` | Load profile: `smoke`, `load`, `staircase`, `soak`, `spike`, `average_load`, `stress`, `breakpoint`, or `all` | `-e K6_SCENARIO=staircase` |
 | `-e BASE_URL=<url>` | Target a different server | `-e BASE_URL=http://localhost:8000` |
 | `-e K6_SOAK_DURATION=<d>` | Hold time for the `soak` profile | `-e K6_SOAK_DURATION=15m` |
+| `-e K6_AVG_LOAD_DURATION=<d>` | Hold time for the `average_load` profile | `-e K6_AVG_LOAD_DURATION=30m` |
+| `-e K6_BREAKPOINT_DURATION=<d>` | Ramp duration for the `breakpoint` profile | `-e K6_BREAKPOINT_DURATION=30m` |
+| `-e K6_BREAKPOINT_MAX_VUS=<n>` | Final VU target for the `breakpoint` profile | `-e K6_BREAKPOINT_MAX_VUS=300` |
 | `-e K6_DELETE_POOL_SIZE=<n>` | Override the delete/cancel seed pool (otherwise computed from the profile) | `-e K6_DELETE_POOL_SIZE=5000` |
 | `-e SEED_API_KEY=<key>` | Override the seed-route auth key (default read from `.env`) | `-e SEED_API_KEY=<value>` |
 | `-e K6_P95_MS=<n>` | Relax the p95 latency threshold | `-e K6_P95_MS=1000` |
@@ -378,13 +381,18 @@ The scripts share the helpers in `tests/performance/helpers/`:
 | ----------- | ------------- | ------------------------------ | --------------------------------------- |
 | `smoke`     | constant-vus  | 3, 30s                         | Sanity check that the script works      |
 | `load`      | ramping-vus   | ramp to 5, hold 30, ramp to 0   | Baseline under typical load             |
+| `average_load` | ramping-vus | ramp to 20, hold 10m (default), ramp to 0 | Sustained typical/expected traffic |
+| `stress`    | ramping-vus   | 40→80→120→160 (1m ramp + 2m hold each), ramp to 0 | Escalate beyond the knee to find the degradation point |
 | `staircase` | ramping-vus   | 5,10,15,20,25,30,40,50 (45s ea)| Find the concurrency knee               |
 | `soak`      | ramping-vus   | ramp to 40, hold 10m (default) | Detect connection growth / leaks        |
 | `spike`     | ramping-vus   | 0 → 200 (15s), hold 200 (1m)   | Expose pool exhaustion sharply          |
+| `breakpoint`| ramping-vus   | linear ramp 0 → 200 over 20m (default) | Keep increasing until the system fails |
 
 Select with `-e K6_SCENARIO=<name>`. The `staircase` profile holds each step ~45s so percentile metrics are stable.
 
-Use `-e K6_SCENARIO=all` to run every profile at once (all five run in parallel). This is an escape hatch for a single combined run: because `spike` deliberately overwhelms the 15-connection pool, an `all` run will report threshold breaches (thresholds use `abortOnFail: false`, so they are recorded, not aborted). Destructive/cancel tests size their seed pool from the summed concurrency of all active profiles.
+> **Why the VU levels look low:** this is a study/portfolio project running against a local API on a single machine. The profile values are intentionally small so a run stays feasible on local hardware while still crossing the app's real saturation point (the 15-connection pool / 40-thread pool). Treat them as starting points — raise them (or use the env vars above) to match a real, larger deployment.
+
+Use `-e K6_SCENARIO=all` to run every profile at once (all eight run in parallel). This is an escape hatch for a single combined run: because `spike`, `stress` and `breakpoint` deliberately overwhelm the 15-connection pool, an `all` run will report threshold breaches (thresholds use `abortOnFail: false`, so they are recorded, not aborted). Destructive/cancel tests size their seed pool from the summed concurrency of all active profiles.
 
 ### Delete-test seed pool — users
 
@@ -478,7 +486,7 @@ tests/
 │   │   ├── pool_helpers.js  # parseDuration, computePoolConfig (dimensionamento do seed pool)
 │   │   ├── options_helpers.js         # loadOptions() + thresholds configuráveis via env
 │   │   ├── request_helpers.js         # wrappers HTTP, logFailure, parseBody, sleepBetween, checkListFields
-│   │   ├── scenarios_helpers.js       # perfils compartilhados smoke/load/staircase/soak/spike
+│   │   ├── scenarios_helpers.js       # perfils compartilhados smoke/load/staircase/soak/spike/average_load/stress/breakpoint
 │   │   └── seed_helpers.js     # rota de seed (seedViaRoute, seedPool, resolveSeedKey) + seeders por rota de negócio (ensureOneIfEmpty, ensureRows, seedReservationGraph)
 │   └── load/
 │       ├── users/             # um script k6 por operação HTTP
@@ -785,9 +793,12 @@ Todo script segue o mesmo formato — `k6 run <script> [opções]`. Todos os par
 
 | Parâmetro | Finalidade | Exemplo |
 | --------- | ---------- | ------- |
-| `-e K6_SCENARIO=<nome>` | Perfil de carga: `smoke`, `load`, `staircase`, `soak`, `spike` ou `all` | `-e K6_SCENARIO=staircase` |
+| `-e K6_SCENARIO=<nome>` | Perfil de carga: `smoke`, `load`, `staircase`, `soak`, `spike`, `average_load`, `stress`, `breakpoint` ou `all` | `-e K6_SCENARIO=staircase` |
 | `-e BASE_URL=<url>` | Apontar para outro servidor | `-e BASE_URL=http://localhost:8000` |
 | `-e K6_SOAK_DURATION=<d>` | Tempo de sustentação do perfil `soak` | `-e K6_SOAK_DURATION=15m` |
+| `-e K6_AVG_LOAD_DURATION=<d>` | Tempo de sustentação do perfil `average_load` | `-e K6_AVG_LOAD_DURATION=30m` |
+| `-e K6_BREAKPOINT_DURATION=<d>` | Duração da rampa do perfil `breakpoint` | `-e K6_BREAKPOINT_DURATION=30m` |
+| `-e K6_BREAKPOINT_MAX_VUS=<n>` | Alvo final de VUs do perfil `breakpoint` | `-e K6_BREAKPOINT_MAX_VUS=300` |
 | `-e K6_DELETE_POOL_SIZE=<n>` | Sobrescrever o pool de seed dos testes de delete/cancel (caso contrário, calculado pelo perfil) | `-e K6_DELETE_POOL_SIZE=5000` |
 | `-e SEED_API_KEY=<chave>` | Sobrescrever a chave de auth da rota de seed (padrão lido do `.env`) | `-e SEED_API_KEY=<valor>` |
 | `-e K6_P95_MS=<n>` | Relaxar o limiar de latência p95 | `-e K6_P95_MS=1000` |
@@ -830,13 +841,18 @@ Os scripts compartilham os helpers em `tests/performance/helpers/`:
 | ----------- | ------------- | -------------------------------- | ------------------------------------------ |
 | `smoke`     | constant-vus  | 3, 30s                           | Verificação rápida de que o script funciona |
 | `load`      | ramping-vus   | ramp até 5, mantém 30, ramp a 0  | Linha de base sob carga típica             |
+| `average_load` | ramping-vus | ramp até 20, mantém 10m (padrão), ramp a 0 | Tráfego típico/esperado sustentado |
+| `stress`    | ramping-vus   | 40→80→120→160 (1m de ramp + 2m de sustentação cada), ramp a 0 | Escalar além do "knee" para achar o ponto de degradação |
 | `staircase` | ramping-vus   | 5,10,15,20,25,30,40,50 (45s cda) | Encontrar o "knee" de concorrência         |
 | `soak`      | ramping-vus   | ramp até 40, mantém 10m (padrão) | Detectar crescimento/ vazamentos de conexão |
 | `spike`     | ramping-vus   | 0 → 200 (15s), mantém 200 (1m)  | Expor exaustão do pool de forma acentuada  |
+| `breakpoint`| ramping-vus   | rampa linear 0 → 200 em 20m (padrão) | Aumentar continuamente até o sistema falhar |
 
 Selecione com `-e K6_SCENARIO=<nome>`. O perfil `staircase` mantém cada etapa ~45s para que as métricas de percentil fiquem estáveis.
 
-Use `-e K6_SCENARIO=all` para executar todos os perfis de uma vez (os cinco rodam em paralelo). Isso é um escape para uma execução combinada única: como `spike` deliberadamente sobrecarrega o pool de 15 conexões, uma execução `all` reportará violações de limiar (os thresholds usam `abortOnFail: false`, então são registrados, não abortados). Testes de exclusão/cancelamento dimensionam seu pool de seed a partir da concorrência somada de todos os perfis ativos.
+> **Por que os níveis de VU parecem baixos:** este é um projeto de estudo/portfólio executado contra uma API local em uma única máquina. Os valores dos perfis são intencionalmente pequenos para que uma execução seja viável no hardware local e, mesmo assim, cruze o ponto real de saturação do app (pool de 15 conexões / threadpool de 40). Trate-os como pontos de partida — aumente-os (ou use as variáveis de ambiente acima) para refletir um ambiente real maior.
+
+Use `-e K6_SCENARIO=all` para executar todos os perfis de uma vez (os oito rodam em paralelo). Isso é um escape para uma execução combinada única: como `spike`, `stress` e `breakpoint` deliberadamente sobrecarregam o pool de 15 conexões, uma execução `all` reportará violações de limiar (os thresholds usam `abortOnFail: false`, então são registrados, não abortados). Testes de exclusão/cancelamento dimensionam seu pool de seed a partir da concorrência somada de todos os perfis ativos.
 
 ### Pool de seed do teste de exclusão — usuários
 
