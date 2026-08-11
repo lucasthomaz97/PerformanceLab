@@ -1,4 +1,7 @@
 const SOAK_DURATION = __ENV.K6_SOAK_DURATION || '10m';
+const AVG_LOAD_DURATION = __ENV.K6_AVG_LOAD_DURATION || '10m';
+const BREAKPOINT_DURATION = __ENV.K6_BREAKPOINT_DURATION || '20m';
+const BREAKPOINT_MAX_VUS = Number(__ENV.K6_BREAKPOINT_MAX_VUS) || 200;
 
 const scenarios = {
   smoke: {
@@ -53,9 +56,43 @@ const scenarios = {
     ],
     gracefulRampDown: '30s',
   },
+  average_load: {
+    executor: 'ramping-vus',
+    startVUs: 0,
+    stages: [
+      { duration: '1m', target: 20 },
+      { duration: AVG_LOAD_DURATION, target: 20 },
+      { duration: '1m', target: 0 },
+    ],
+    gracefulRampDown: '30s',
+  },
+  stress: {
+    executor: 'ramping-vus',
+    startVUs: 0,
+    stages: [
+      { duration: '1m', target: 40 },
+      { duration: '2m', target: 40 },
+      { duration: '1m', target: 80 },
+      { duration: '2m', target: 80 },
+      { duration: '1m', target: 120 },
+      { duration: '2m', target: 120 },
+      { duration: '1m', target: 160 },
+      { duration: '2m', target: 160 },
+      { duration: '1m', target: 0 },
+    ],
+    gracefulRampDown: '30s',
+  },
+  breakpoint: {
+    executor: 'ramping-vus',
+    startVUs: 0,
+    stages: [
+      { duration: BREAKPOINT_DURATION, target: BREAKPOINT_MAX_VUS },
+    ],
+    gracefulRampDown: '30s',
+  },
 };
 
-const ALL_NAMES = ['smoke', 'load', 'staircase', 'soak', 'spike'];
+const ALL_NAMES = ['smoke', 'load', 'staircase', 'soak', 'spike', 'average_load', 'stress', 'breakpoint'];
 
 export function resolveScenarioName() {
   return __ENV.K6_SCENARIO || 'load';
@@ -75,4 +112,10 @@ export function optionsScenarios(name) {
   return { [name]: scenarios[name] };
 }
 
-export { scenarios, SOAK_DURATION };
+export {
+  scenarios,
+  SOAK_DURATION,
+  AVG_LOAD_DURATION,
+  BREAKPOINT_DURATION,
+  BREAKPOINT_MAX_VUS,
+};
