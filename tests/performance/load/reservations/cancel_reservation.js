@@ -1,5 +1,5 @@
 import { check } from 'k6';
-import { patchJson, logFailure, parseBody, sleepBetween } from '../../helpers/request_helpers.js';
+import { patchJson, logFailure, parseBody, pacedSleep } from '../../helpers/request_helpers.js';
 import { loadOptions } from '../../helpers/options_helpers.js';
 import { seedPool } from '../../helpers/seed_helpers.js';
 import { BASE_URL } from '../../helpers/config.js';
@@ -11,7 +11,7 @@ export function setup() {
 }
 
 export default function (data) {
-  const idx = ((__VU - 1) * data.sliceSize) + (__ITER % data.sliceSize);
+  const idx = data.sliceOffsets[__VU - 1] + (__ITER % data.sliceSizes[__VU - 1]);
   const id = data.ids[idx];
 
   const response = patchJson(
@@ -33,5 +33,5 @@ export default function (data) {
     'status cancelled': (r) => r.status === 'cancelled',
   });
 
-  sleepBetween();
+  pacedSleep('reservations');
 }

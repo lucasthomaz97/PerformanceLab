@@ -23,11 +23,11 @@ tests/
 │   ├── helpers/
 │   │   ├── config.js               # BASE_URL, RUN_ID, SCENARIO, DAY_MS, isoDateFromOffset
 │   │   ├── general_helpers.js         # randomIntBetween shared helper
-│   │   ├── pool_helpers.js  # parseDuration, computePoolConfig, byIdSeedCount (seed-pool + by-id sizing)
+│   │   ├── pool_helpers.js  # parseDuration, computePoolConfig, computePerVuConfig, computeSliceLayout, byIdSeedCount (seed-pool + by-id sizing)
 │   │   ├── options_helpers.js         # loadOptions() + env-tunable thresholds
 │   │   ├── request_helpers.js         # HTTP verb wrappers, logFailure, parseBody, sleepBetween, checkListFields
 │   │   ├── scenarios_helpers.js       # shared smoke/load/staircase/soak/spike/average_load/stress/breakpoint profiles
-│   │   └── seed_helpers.js     # seed API route (seedViaRoute, seedPool, resolveSeedKey) + business-route seeders (ensureOneIfEmpty, ensureRows, seedReservationGraph)
+│   │   └── seed_helpers.js     # seed API route (seedViaRoute, seedById, seedPool, resolveSeedKey) + business-route seeders (ensureOneIfEmpty, ensureRows, seedReservationGraph)
 │   └── load/
 │       ├── users/             # one k6 script per HTTP operation
 │       ├── rooms/
@@ -303,7 +303,13 @@ Load tests are **k6** scripts (not pytest). They target a running server and are
 
 ### How to run
 
-Requires [k6](https://k6.io/docs/getting-started/installation/) installed (it is not a Python dependency). The server must be running first (e.g. `uv run uvicorn api.main:app`).
+Requires [k6](https://k6.io/docs/getting-started/installation/) installed (it is not a Python dependency). The server must be running first — start it with a keep-alive timeout above the longest paced sleep, otherwise the server closes idle keep-alive connections mid-run and the paced delete/put tests see `EOF` errors:
+
+```bash
+uv run uvicorn api.main:app --reload --timeout-keep-alive 30
+```
+
+Every load script also sets `noConnectionReuse: true` (`loadOptions`), so k6 never reuses a keep-alive connection the server may have closed — a defensive guard against the same `EOF` class of errors regardless of server flags.
 
 Run any script as-is to use its default `load` profile:
 
@@ -337,9 +343,13 @@ Every script follows the same shape — `k6 run <script> [options]`. All paramet
 | `-e BASE_URL=<url>` | Target a different server | `-e BASE_URL=http://localhost:8000` |
 | `-e K6_SOAK_DURATION=<d>` | Hold time for the `soak` profile | `-e K6_SOAK_DURATION=15m` |
 | `-e K6_AVG_LOAD_DURATION=<d>` | Hold time for the `average_load` profile | `-e K6_AVG_LOAD_DURATION=30m` |
-| `-e K6_BREAKPOINT_DURATION=<d>` | Ramp duration for the `breakpoint` profile | `-e K6_BREAKPOINT_DURATION=30m` |
-| `-e K6_BREAKPOINT_MAX_VUS=<n>` | Final VU target for the `breakpoint` profile | `-e K6_BREAKPOINT_MAX_VUS=300` |
 | `-e K6_DELETE_POOL_SIZE=<n>` | Override the delete/cancel seed pool (otherwise computed from the profile) | `-e K6_DELETE_POOL_SIZE=5000` |
+| `-e K6_PACING_ROOMS=<f>` | Multiply the inter-iteration sleep (normally 500–1500ms) for room delete/put tests (default 5) | `-e K6_PACING_ROOMS=2` |
+| `-e K6_PACING_USERS=<f>` | Multiply the inter-iteration sleep for user delete/put tests (default 2.5) | `-e K6_PACING_USERS=1` |
+| `-e K6_PACING_RESERVATIONS=<f>` | Multiply the inter-iteration sleep for reservation cancel tests (default 1) | `-e K6_PACING_RESERVATIONS=0.5` |
+| `-e K6_POOL_SAFETY=<f>` | Over-provisioning factor for delete/cancel seed pools (default 1.2) | `-e K6_POOL_SAFETY=1.5` |
+| `-e K6_SEED_POOL_WARN=<n>` | Warn when a delete/cancel seed pool exceeds this row count (default 75000) | `-e K6_SEED_POOL_WARN=50000` |
+| `-e K6_SEED_POOL_MAX=<n>` | Abort when a delete/cancel seed pool exceeds this row count (default 150000) | `-e K6_SEED_POOL_MAX=100000` |
 | `-e SEED_API_KEY=<key>` | Override the seed-route auth key (default read from `.env`) | `-e SEED_API_KEY=<value>` |
 | `-e K6_P95_MS=<n>` | Relax the p95 latency threshold | `-e K6_P95_MS=1000` |
 | `-e K6_ERROR_RATE=<f>` | Relax the error-rate threshold | `-e K6_ERROR_RATE=0.05` |
@@ -369,11 +379,11 @@ k6 run tests/performance/load/users/get_users.js --out json=results.json
 The scripts share the helpers in `tests/performance/helpers/`:
 
 - `general_helpers.js` — `randomIntBetween`
-- `request_helpers.js` — `postJson`/`putJson`/`patchJson`/`getJson`/`delJson` (embed the `Content-Type` header), `logFailure`, `parseBody`, `sleepBetween`, `nextIdFromVus`, `checkListFields`
+- `request_helpers.js` — `postJson`/`putJson`/`patchJson`/`getJson`/`delJson` (embed the `Content-Type` header), `logFailure`, `parseBody`, `sleepBetween`, `pacedSleep(kind)`, `nextIdFromVus`, `checkListFields`
 - `config.js` — `BASE_URL`, `RUN_ID`, `SCENARIO`, `DAY_MS` and `isoDateFromOffset(offsetDays)` (shared per-file preamble)
-- `options_helpers.js` — `loadOptions({ setupTimeout })` builds the scenarios + thresholds block every script used to repeat; thresholds are env-tunable (see [Thresholds](#thresholds))
-- `seed_helpers.js` — encapsulates the internal seed API (`seedViaRoute`, `sliceForVus`, `seedPool`, `resolveSeedKey`); the delete/cancel tests' `setup()` is just `return seedPool('rooms' | 'users' | 'reservations')`. Also provides business-route seeders for the read/update tests: `ensureOneIfEmpty(kind)` (get_rooms/get_users), `ensureRows(kind, count, prefix)` (get/put_*_by_id), and `seedReservationGraph(kind, count)` (get_user_reservations/get_room_reservations)
-- `pool_helpers.js` — `parseDuration`, `computePoolConfig`, `byIdSeedCount` (seed-pool + by-id sizing)
+- `options_helpers.js` — `loadOptions({ setupTimeout })` builds the scenarios + thresholds block every script used to repeat; thresholds are env-tunable (see [Thresholds](#thresholds)); also sets `noConnectionReuse: true` so k6 never reuses a keep-alive connection the server may have closed (avoids `EOF` on the paced delete/put tests)
+- `seed_helpers.js` — encapsulates the internal seed API (`seedViaRoute`, `seedById`, `sliceForVus`, `seedPool`, `resolveSeedKey`); the delete/cancel tests' `setup()` is just `return seedPool('rooms' | 'users' | 'reservations')`, and the put-by-id tests seed with `seedById(kind, count)` (fresh rows via `/seed/{kind}`, returning the actual inserted ids). Also provides business-route seeders for the read tests: `ensureOneIfEmpty(kind)` (get_rooms/get_users), `ensureRows(kind, count, prefix)` (get_*_by_id), and `seedReservationGraph(kind, count)` (get_user_reservations/get_room_reservations)
+- `pool_helpers.js` — `parseDuration`, `computePoolConfig`, `computePerVuConfig`, `computeSliceLayout`, `byIdSeedCount`, `pacingFactor(kind)`, `guardSeedPoolSize` (seed-pool + by-id sizing, per-entity pacing, and the delete/cancel pool guard)
 - `scenarios_helpers.js` — all profiles are centralized so every route test runs identical load shapes
 
 ### Profiles
@@ -387,19 +397,38 @@ The scripts share the helpers in `tests/performance/helpers/`:
 | `staircase` | ramping-vus   | 5,10,15,20,25,30,40,50 (45s ea)| Find the concurrency knee               |
 | `soak`      | ramping-vus   | ramp to 40, hold 10m (default) | Detect connection growth / leaks        |
 | `spike`     | ramping-vus   | 0 → 200 (15s), hold 200 (1m)   | Expose pool exhaustion sharply          |
-| `breakpoint`| ramping-vus   | linear ramp 0 → 200 over 20m (default) | Keep increasing until the system fails |
+| `breakpoint`| ramping-vus   | steps 50 → 100 → 150 → 200 (2m each)  | Keep increasing until the system fails |
 
 Select with `-e K6_SCENARIO=<name>`. The `staircase` profile holds each step ~45s so percentile metrics are stable.
 
 > **Why the VU levels look low:** this is a study/portfolio project running against a local API on a single machine. The profile values are intentionally small so a run stays feasible on local hardware while still crossing the app's real saturation point (the 15-connection pool / 40-thread pool). Treat them as starting points — raise them (or use the env vars above) to match a real, larger deployment.
 
-Use `-e K6_SCENARIO=all` to run every profile at once (all eight run in parallel). This is an escape hatch for a single combined run: because `spike`, `stress` and `breakpoint` deliberately overwhelm the 15-connection pool, an `all` run will report threshold breaches (thresholds use `abortOnFail: false`, so they are recorded, not aborted). Destructive/cancel tests size their seed pool from the summed concurrency of all active profiles.
+Use `-e K6_SCENARIO=all` to run every profile at once (all eight run in parallel). This is an escape hatch for a single combined run: because `spike`, `stress` and `breakpoint` deliberately overwhelm the 15-connection pool, an `all` run will report threshold breaches (thresholds use `abortOnFail: false`, so they are recorded, not aborted). Delete/cancel tests size their seed pool from the *scheduled requests* of all active profiles — each VU reserves rows for its own scheduled active window (not peak concurrency), so the combined pool stays lean.
+
+### Delete/cancel seed pool: sizing & guard
+
+`delete_user.js`, `delete_room.js` and `cancel_reservation.js` size their pools with `seedPool(kind)` so the pool never drains mid-run (only the route under test is hit during load). The estimator models **scheduled requests per VU**, not peak concurrency:
+
+`poolSize = Σ over VUs ( ceil( activeTime_i / pacingSeconds × K6_POOL_SAFETY ) + 1 )`
+
+- `activeTime_i` is VU `i`'s scheduled active window in the ramp profile. k6 starts VUs in order (index 0 first) and stops the last-started first, so the earliest VUs run the whole scenario while the last ones run only seconds. Each VU's window is derived from the profile's ramp crossings (`computePerVuConfig`).
+- The `+ 1` reserves the in-flight iteration each VU may finish during `gracefulRampDown`.
+- `pacingSeconds` is the entity pacing factor — the inter-iteration **think time**. Sleeps stay random (`500–1500ms`) but are multiplied by the entity factor, so a realistic longer wait also shrinks the pool: the pool only reserves what the run will actually consume.
+- `sliceForVus` hands each VU a **disjoint slice sized to its own window** (`computeSliceLayout`) instead of an equal split, so a naive `floor(poolSize / maxVUs)` distribution can never strand the long-running VUs that ramping profiles start first.
+
+Only the **delete/cancel/put** scripts are paced (`pacedSleep`) for realism; get/post tests keep the fast 500–1500ms sleep. Put pools stay small (`byIdSeedCount`, maxVUs-based), so pacing only changes their rhythm.
+
+| Entity | Factor (default) | Sleep range | Realism | Expected pool — load / staircase / soak / stress / breakpoint / all |
+| --- | --- | --- | --- | --- |
+| Rooms | `K6_PACING_ROOMS` = 5 | 2.5–7.5s | rooms change rarely | 1.2k / 2.0k / 6.2k / 17.3k / 11.6k / 45.5k |
+| Users | `K6_PACING_USERS` = 2.5 | 1.25–3.75s | more frequent than rooms | 2.4k / 4.0k / 12.4k / 34.6k / 23.1k / 91.0k |
+| Reservations | `K6_PACING_RESERVATIONS` = 1 | 0.5–1.5s | most stressful, baseline | 5.9k / 10.1k / 31.0k / 86.6k / 57.8k / 227.4k |
+
+**Guard.** `guardSeedPoolSize` runs inside `seedPool`: if the computed pool exceeds `K6_SEED_POOL_WARN` (default `75000`) it logs a warning; above `K6_SEED_POOL_MAX` (default `150000`) it aborts `setup()` with guidance (milder profile, `-e K6_DELETE_POOL_SIZE=<n>`, raise `K6_SEED_POOL_*`, or raise the `K6_PACING_*` factor). At defaults: reservations `stress` (86.6k) warns and reservations `all` (227.4k) aborts; rooms/users never trip. An explicit `-e K6_DELETE_POOL_SIZE=<n>` bypasses the guard. If an override is smaller than `maxVUs`, `sliceForVus` aborts with `pool size X < maxVus Y`.
 
 ### Delete-test seed pool — users
 
-`delete_user.js` uses the same scenarios. Because `DELETE /users/{id}` permanently removes rows, `setup()` calls the dedicated **`POST /seed/users`** route (not the business `POST /users`) with a quantity derived from the scenario so the pool never drains mid-run (only the route under test is hit during load):
-
-`quantity = maxVUs * (totalSeconds / AVG_ITER_SECONDS) * 1.2`, where `AVG_ITER_SECONDS = 1.0` (sleep is 500–1500ms, so real iterations are slightly slower — over-provisioning is the safe direction). The route bulk-inserts the users directly into Postgres and returns their ids; each VU is given a disjoint slice (`floor(poolSize / maxVUs)`) so no two VUs target the same id (no 404 races). Override with `-e K6_DELETE_POOL_SIZE=<n>`. Expect large seed counts on `soak`/`staircase` (e.g. ~7.9k on `load`, ~22k on `staircase`, ~33k on `soak`). If the override is smaller than `maxVUs`, `sliceForVus` aborts `setup()` with a clear error (`pool size X < maxVus Y`) instead of firing malformed `/users/undefined` requests.
+`delete_user.js` uses the same scenarios. Because `DELETE /users/{id}` permanently removes rows, `setup()` calls the dedicated **`POST /seed/users`** route (not the business `POST /users`) with the shared estimator + entity pacing (see *Delete/cancel seed pool: sizing & guard*). For users the default `K6_PACING_USERS=2.5` yields ~35k rows on `stress` and ~91k on `all`. The route bulk-inserts the users directly into Postgres and returns their ids; each VU is given a disjoint slice sized to its own scheduled active window (see *Delete/cancel seed pool: sizing & guard*), so no two VUs target the same id and none runs out mid-run (no 404 races). Override the computed size with `-e K6_DELETE_POOL_SIZE=<n>`.
 
 `setupTimeout` is set to `10m` (default is 60s) so seeding large pools doesn't abort before VUs start.
 
@@ -409,13 +438,13 @@ The load-test routes are only registered when `ENABLE_LOADTEST_ENDPOINTS=true` i
 
 ### Delete-test seed pool — rooms
 
-`delete_room.js` uses the same scenarios as `delete_user.js`. `setup()` calls the dedicated **`POST /seed/rooms`** route (not the business `POST /rooms`) with the same pool formula (`quantity = maxVUs * (totalSeconds / AVG_ITER_SECONDS) * 1.2`), bulk-inserting the rooms directly into Postgres and returning their ids. Each VU is given a disjoint slice (`floor(poolSize / maxVUs)`) so no two VUs target the same id.
+`delete_room.js` uses the same scenarios as `delete_user.js`. `setup()` calls the dedicated **`POST /seed/rooms`** route (not the business `POST /rooms`) with the shared estimator + entity pacing (see *Delete/cancel seed pool: sizing & guard*) — rooms are the slowest-paced (`K6_PACING_ROOMS=5`), so they seed the fewest rows (~17k on `stress`, ~45k on `all`). The route bulk-inserts the rooms directly into Postgres and returns their ids. Each VU is given a disjoint slice sized to its own scheduled active window (see *Delete/cancel seed pool: sizing & guard*), so no two VUs target the same id.
 
 Because `DELETE /rooms/{id}` is a **soft-delete** (sets `is_active=false`, row stays, re-deletes still return 204), the pool never 404s even if an id is deleted twice. `setupTimeout` is `10m`. Override the pool with `-e K6_DELETE_POOL_SIZE=<n>`. The `/seed/rooms` route is authenticated with the `X-Seed-Key` header, read from `../../../../.env` (relative to the script under `rooms/`) or overridable with `-e SEED_API_KEY=<value>`, and is only registered when `ENABLE_LOADTEST_ENDPOINTS=true`.
 
 ### Cancel-test seed pool — reservations
 
-`cancel_reservation.js` uses the same scenarios. Because `PATCH /reservations/{id}/cancel` works only once per reservation (a second call returns **400**), `setup()` calls the dedicated **`POST /seed/reservations`** route with a quantity from the same pool formula as the delete tests (`quantity = maxVUs * (totalSeconds / AVG_ITER_SECONDS) * 1.2`). Each VU is given a disjoint slice (`floor(poolSize / maxVUs)`) so no two VUs cancel the same id. Override with `-e K6_DELETE_POOL_SIZE=<n>`. `setupTimeout` is `10m`.
+`cancel_reservation.js` uses the same scenarios. Because `PATCH /reservations/{id}/cancel` works only once per reservation (a second call returns **400**), `setup()` calls the dedicated **`POST /seed/reservations`** route with the shared estimator + entity pacing (see *Delete/cancel seed pool: sizing & guard*) — reservations have the fastest pacing (`K6_PACING_RESERVATIONS=1`), so they seed the most rows (~87k on `stress`; `all` hits the guard at ~227k). Each VU is given a disjoint slice sized to its own scheduled active window (see *Delete/cancel seed pool: sizing & guard*), so no two VUs cancel the same id and none runs out mid-run. Override with `-e K6_DELETE_POOL_SIZE=<n>`. `setupTimeout` is `10m`.
 
 `POST /seed/reservations` is authenticated with `X-Seed-Key` (read from `../../../../.env` or `-e SEED_API_KEY=<value>`) and only registered when `ENABLE_LOADTEST_ENDPOINTS=true`. Seeding generates its own user + room pools (100 each) plus `quantity` **confirmed** reservations with per-room non-overlapping dates, so it never trips the `no_overlap` GiST exclusion constraint (confirmed reservations on the same room must not have overlapping date ranges — see the schema note below).
 
@@ -441,7 +470,7 @@ k6 run tests/performance/load/users/get_users.js -e K6_SCENARIO=soak -e K6_P95_M
 
 ### Test-ordering caveat
 
-`delete_user.js` permanently removes users, and `delete_room.js` soft-deletes rooms (hidden from `GET /rooms`). The by-id tests (`get_user_by_id`, `get_room_by_id`, `put_user_by_id`, `put_room_by_id`) assume the first `max(10, maxVUs)` ids exist — the pool scales with the active scenario — so running a delete/cancel test first will produce 404s and threshold breaches on later by-id runs. If the load-test DB is not disposable, reseed (or re-run a create/list test) before by-id runs.
+`delete_user.js` permanently removes users, and `delete_room.js` soft-deletes rooms (hidden from `GET /rooms`). The get-by-id tests (`get_user_by_id`, `get_room_by_id`) assume the first `max(10, maxVUs)` ids exist — the pool scales with the active scenario — so running a delete/cancel test first will produce 404s and threshold breaches on later get-by-id runs. `put_user_by_id` / `put_room_by_id` are **not** affected: they seed fresh rows through `POST /seed/{kind}` and target the returned ids, so they work after any prior run. If the load-test DB is not disposable, reseed (or re-run a create/list test) before get-by-id runs.
 
 ### Performance tests in CI
 
@@ -495,7 +524,7 @@ tests/
 │   │   ├── options_helpers.js         # loadOptions() + thresholds configuráveis via env
 │   │   ├── request_helpers.js         # wrappers HTTP, logFailure, parseBody, sleepBetween, checkListFields
 │   │   ├── scenarios_helpers.js       # perfils compartilhados smoke/load/staircase/soak/spike/average_load/stress/breakpoint
-│   │   └── seed_helpers.js     # rota de seed (seedViaRoute, seedPool, resolveSeedKey) + seeders por rota de negócio (ensureOneIfEmpty, ensureRows, seedReservationGraph)
+│   │   └── seed_helpers.js     # rota de seed (seedViaRoute, seedById, seedPool, resolveSeedKey) + seeders por rota de negócio (ensureOneIfEmpty, ensureRows, seedReservationGraph)
 │   └── load/
 │       ├── users/             # um script k6 por operação HTTP
 │       ├── rooms/
@@ -771,7 +800,13 @@ Os testes de carga são scripts **k6** (não pytest). Eles apontam para um servi
 
 ### Como executar
 
-Requer [k6](https://k6.io/docs/getting-started/installation/) instalado (não é uma dependência Python). O servidor deve estar em execução primeiro (ex.: `uv run uvicorn api.main:app`).
+Requer [k6](https://k6.io/docs/getting-started/installation/) instalado (não é uma dependência Python). O servidor deve estar em execução primeiro — inicie-o com um `timeout-keep-alive` acima do maior sleep com pacing; caso contrário, o servidor fecha conexões keep-alive ociosas no meio do run e os testes paced de delete/put apresentam erros `EOF`:
+
+```bash
+uv run uvicorn api.main:app --reload --timeout-keep-alive 30
+```
+
+Além disso, todo script de carga define `noConnectionReuse: true` (`loadOptions`), para o k6 nunca reutilizar uma conexão keep-alive que o servidor possa ter fechado — um guard defensivo contra a mesma classe de erro `EOF`, independentemente dos flags do servidor.
 
 Execute qualquer script como está para usar o perfil `load` padrão:
 
@@ -805,9 +840,13 @@ Todo script segue o mesmo formato — `k6 run <script> [opções]`. Todos os par
 | `-e BASE_URL=<url>` | Apontar para outro servidor | `-e BASE_URL=http://localhost:8000` |
 | `-e K6_SOAK_DURATION=<d>` | Tempo de sustentação do perfil `soak` | `-e K6_SOAK_DURATION=15m` |
 | `-e K6_AVG_LOAD_DURATION=<d>` | Tempo de sustentação do perfil `average_load` | `-e K6_AVG_LOAD_DURATION=30m` |
-| `-e K6_BREAKPOINT_DURATION=<d>` | Duração da rampa do perfil `breakpoint` | `-e K6_BREAKPOINT_DURATION=30m` |
-| `-e K6_BREAKPOINT_MAX_VUS=<n>` | Alvo final de VUs do perfil `breakpoint` | `-e K6_BREAKPOINT_MAX_VUS=300` |
 | `-e K6_DELETE_POOL_SIZE=<n>` | Sobrescrever o pool de seed dos testes de delete/cancel (caso contrário, calculado pelo perfil) | `-e K6_DELETE_POOL_SIZE=5000` |
+| `-e K6_PACING_ROOMS=<f>` | Multiplicar o sleep entre iterações (normalmente 500–1500ms) nos testes de delete/put de salas (padrão 5) | `-e K6_PACING_ROOMS=2` |
+| `-e K6_PACING_USERS=<f>` | Multiplicar o sleep entre iterações nos testes de delete/put de usuários (padrão 2.5) | `-e K6_PACING_USERS=1` |
+| `-e K6_PACING_RESERVATIONS=<f>` | Multiplicar o sleep entre iterações no teste de cancelamento de reservas (padrão 1) | `-e K6_PACING_RESERVATIONS=0.5` |
+| `-e K6_POOL_SAFETY=<f>` | Fator de superdimensionamento dos pools de seed de delete/cancel (padrão 1.2) | `-e K6_POOL_SAFETY=1.5` |
+| `-e K6_SEED_POOL_WARN=<n>` | Avisar quando o pool de seed de delete/cancel superar esta contagem (padrão 75000) | `-e K6_SEED_POOL_WARN=50000` |
+| `-e K6_SEED_POOL_MAX=<n>` | Abortar quando o pool de seed de delete/cancel superar esta contagem (padrão 150000) | `-e K6_SEED_POOL_MAX=100000` |
 | `-e SEED_API_KEY=<chave>` | Sobrescrever a chave de auth da rota de seed (padrão lido do `.env`) | `-e SEED_API_KEY=<valor>` |
 | `-e K6_P95_MS=<n>` | Relaxar o limiar de latência p95 | `-e K6_P95_MS=1000` |
 | `-e K6_ERROR_RATE=<f>` | Relaxar o limiar de taxa de erro | `-e K6_ERROR_RATE=0.05` |
@@ -837,11 +876,11 @@ k6 run tests/performance/load/users/get_users.js --out json=results.json
 Os scripts compartilham os helpers em `tests/performance/helpers/`:
 
 - `general_helpers.js` — `randomIntBetween`
-- `request_helpers.js` — `postJson`/`putJson`/`patchJson`/`getJson`/`delJson` (embutem o header `Content-Type`), `logFailure`, `parseBody`, `sleepBetween`, `nextIdFromVus`, `checkListFields`
+- `request_helpers.js` — `postJson`/`putJson`/`patchJson`/`getJson`/`delJson` (embutem o header `Content-Type`), `logFailure`, `parseBody`, `sleepBetween`, `pacedSleep(kind)`, `nextIdFromVus`, `checkListFields`
 - `config.js` — `BASE_URL`, `RUN_ID`, `SCENARIO`, `DAY_MS` e `isoDateFromOffset(offsetDays)` (preâmbulo compartilhado entre scripts)
 - `options_helpers.js` — `loadOptions({ setupTimeout })` monta o bloco de cenários + thresholds que todo script repetia; thresholds são configuráveis via env (veja [Thresholds](#thresholds))
-- `seed_helpers.js` — encapsula a API interna de seed (`seedViaRoute`, `sliceForVus`, `seedPool`, `resolveSeedKey`); o `setup()` dos testes de delete/cancel vira `return seedPool('rooms' | 'users' | 'reservations')`. Também provê seeders por rota de negócio para os testes de leitura/atualização: `ensureOneIfEmpty(kind)` (get_rooms/get_users), `ensureRows(kind, count, prefix)` (get/put_*_by_id) e `seedReservationGraph(kind, count)` (get_user_reservations/get_room_reservations)
-- `pool_helpers.js` — `parseDuration`, `computePoolConfig`, `byIdSeedCount` (dimensionamento do seed pool e dos testes por id)
+- `seed_helpers.js` — encapsula a API interna de seed (`seedViaRoute`, `seedById`, `sliceForVus`, `seedPool`, `resolveSeedKey`); o `setup()` dos testes de delete/cancel vira `return seedPool('rooms' | 'users' | 'reservations')`, e os testes de put por id semeiam com `seedById(kind, count)` (linhas novas via `/seed/{kind}`, retornando os ids realmente inseridos). Também provê seeders por rota de negócio para os testes de leitura: `ensureOneIfEmpty(kind)` (get_rooms/get_users), `ensureRows(kind, count, prefix)` (get_*_by_id) e `seedReservationGraph(kind, count)` (get_user_reservations/get_room_reservations)
+- `pool_helpers.js` — `parseDuration`, `computePoolConfig`, `computePerVuConfig`, `computeSliceLayout`, `byIdSeedCount`, `pacingFactor(kind)`, `guardSeedPoolSize` (dimensionamento do seed pool e dos testes por id, pacing por entidade e o guard de pool de delete/cancel)
 - `scenarios_helpers.js` — todos os perfis estão centralizados para que cada teste de rota execute formas de carga idênticas
 
 ### Perfis
@@ -855,7 +894,7 @@ Os scripts compartilham os helpers em `tests/performance/helpers/`:
 | `staircase` | ramping-vus   | 5,10,15,20,25,30,40,50 (45s cda) | Encontrar o "knee" de concorrência         |
 | `soak`      | ramping-vus   | ramp até 40, mantém 10m (padrão) | Detectar crescimento/ vazamentos de conexão |
 | `spike`     | ramping-vus   | 0 → 200 (15s), mantém 200 (1m)  | Expor exaustão do pool de forma acentuada  |
-| `breakpoint`| ramping-vus   | rampa linear 0 → 200 em 20m (padrão) | Aumentar continuamente até o sistema falhar |
+| `breakpoint`| ramping-vus   | etapas 50 → 100 → 150 → 200 (2m cada) | Aumentar continuamente até o sistema falhar |
 
 Selecione com `-e K6_SCENARIO=<nome>`. O perfil `staircase` mantém cada etapa ~45s para que as métricas de percentil fiquem estáveis.
 
@@ -865,9 +904,7 @@ Use `-e K6_SCENARIO=all` para executar todos os perfis de uma vez (os oito rodam
 
 ### Pool de seed do teste de exclusão — usuários
 
-`delete_user.js` usa os mesmos cenários. Como `DELETE /users/{id}` remove linhas permanentemente, o `setup()` chama a rota dedicada **`POST /seed/users`** (não o `POST /users` de negócio) com uma quantidade derivada do cenário, para que o pool nunca se esgote no meio da execução (apenas a rota sob teste é atingida durante a carga):
-
-`quantity = maxVUs * (totalSeconds / AVG_ITER_SECONDS) * 1.2`, onde `AVG_ITER_SECONDS = 1.0` (o sleep é 500–1500ms, então iterações reais são um pouco mais lentas — superdimensionar é a direção segura). A rota insere os usuários em massa diretamente no Postgres e retorna seus ids; cada VU recebe uma fatia disjunta (`floor(poolSize / maxVUs)`) para que dois VUs não atinjam o mesmo id (sem corridas de 404). Sobrescreva com `-e K6_DELETE_POOL_SIZE=<n>`. Espere grandes contagens de seed em `soak`/`staircase` (ex.: ~7,9k em `load`, ~22k em `staircase`, ~33k em `soak`). Se a sobrescrita for menor que `maxVus`, o `sliceForVus` aborta o `setup()` com um erro claro (`pool size X < maxVus Y`) em vez de disparar requisições inválidas para `/users/undefined`.
+`delete_user.js` usa os mesmos cenários. Como `DELETE /users/{id}` remove linhas permanentemente, o `setup()` chama a rota dedicada **`POST /seed/users`** (não o `POST /users` de negócio) com o estimador compartilhado + pacing por entidade (veja *Delete/cancel seed pool: sizing & guard*, em inglês) para que o pool nunca se esgote no meio da execução (apenas a rota sob teste é atingida durante a carga). Para usuários o `K6_PACING_USERS=2.5` padrão gera ~35k linhas em `stress` e ~91k em `all`. A rota insere os usuários em massa diretamente no Postgres e retorna seus ids; cada VU recebe uma fatia disjunta dimensionada para sua própria janela ativa (veja *Delete/cancel seed pool: sizing & guard*), para que dois VUs não atinjam o mesmo id e nenhum se esgote no meio do run (sem corridas de 404). Sobrescreva com `-e K6_DELETE_POOL_SIZE=<n>`. Se a sobrescrita for menor que `maxVus`, o `sliceForVus` aborta o `setup()` com um erro claro (`pool size X < maxVus Y`) em vez de disparar requisições inválidas para `/users/undefined`.
 
 `setupTimeout` é definido como `10m` (o padrão é 60s) para que o seed de grandes pools não aborte antes de os VUs iniciarem.
 
@@ -877,13 +914,13 @@ As rotas de carga são registradas apenas quando `ENABLE_LOADTEST_ENDPOINTS=true
 
 ### Pool de seed do teste de exclusão — salas
 
-`delete_room.js` usa os mesmos cenários que `delete_user.js`. O `setup()` chama a rota dedicada **`POST /seed/rooms`** (não o `POST /rooms` de negócio) com a mesma fórmula de pool (`quantity = maxVUs * (totalSeconds / AVG_ITER_SECONDS) * 1.2`), inserindo as salas em massa diretamente no Postgres e retornando seus ids. Cada VU recebe uma fatia disjunta (`floor(poolSize / maxVUs)`) para que dois VUs não atinjam o mesmo id.
+`delete_room.js` usa os mesmos cenários que `delete_user.js`. O `setup()` chama a rota dedicada **`POST /seed/rooms`** (não o `POST /rooms` de negócio) com o estimador compartilhado + pacing por entidade (veja *Delete/cancel seed pool: sizing & guard*, em inglês) — salas têm o pacing mais lento (`K6_PACING_ROOMS=5`), então geram menos linhas (~17k em `stress`, ~45k em `all`). A rota insere as salas em massa diretamente no Postgres e retorna seus ids. Cada VU recebe uma fatia disjunta dimensionada para sua própria janela ativa (veja *Delete/cancel seed pool: sizing & guard*), para que dois VUs não atinjam o mesmo id.
 
 Como `DELETE /rooms/{id}` é um **soft-delete** (define `is_active=false`, a linha permanece e re-exclusões ainda retornam 204), o pool nunca retorna 404, mesmo que um id seja excluído duas vezes. `setupTimeout` é `10m`. Sobrescreva o pool com `-e K6_DELETE_POOL_SIZE=<n>`. A rota `/seed/rooms` é autenticada com o header `X-Seed-Key`, lido de `../../../../.env` (relativo ao script em `rooms/`) ou sobrescrevível com `-e SEED_API_KEY=<valor>`, e só é registrada quando `ENABLE_LOADTEST_ENDPOINTS=true`.
 
 ### Pool de seed do teste de cancelamento — reservas
 
-`cancel_reservation.js` usa os mesmos cenários. Como `PATCH /reservations/{id}/cancel` funciona apenas uma vez por reserva (uma segunda chamada retorna **400**), o `setup()` chama a rota dedicada **`POST /seed/reservations`** com uma quantidade da mesma fórmula de pool dos testes de exclusão (`quantity = maxVUs * (totalSeconds / AVG_ITER_SECONDS) * 1.2`). Cada VU recebe uma fatia disjunta (`floor(poolSize / maxVUs)`) para que dois VUs não cancelem o mesmo id. Sobrescreva com `-e K6_DELETE_POOL_SIZE=<n>`. `setupTimeout` é `10m`.
+`cancel_reservation.js` usa os mesmos cenários. Como `PATCH /reservations/{id}/cancel` funciona apenas uma vez por reserva (uma segunda chamada retorna **400**), o `setup()` chama a rota dedicada **`POST /seed/reservations`** com o estimador compartilhado + pacing por entidade (veja *Delete/cancel seed pool: sizing & guard*, em inglês) — reservas têm o pacing mais rápido (`K6_PACING_RESERVATIONS=1`), então geram mais linhas (~87k em `stress`; `all` atinge o guard em ~227k). Cada VU recebe uma fatia disjunta dimensionada para sua própria janela ativa (veja *Delete/cancel seed pool: sizing & guard*), para que dois VUs não cancelem o mesmo id e nenhum se esgote no meio do run. Sobrescreva com `-e K6_DELETE_POOL_SIZE=<n>`. `setupTimeout` é `10m`.
 
 `POST /seed/reservations` é autenticado com `X-Seed-Key` (lido de `../../../../.env` ou `-e SEED_API_KEY=<valor>`) e só é registrado quando `ENABLE_LOADTEST_ENDPOINTS=true`. O seed gera seus próprios pools de usuários + salas (100 cada) além de `quantity` reservas **confirmadas** com datas sem sobreposição por sala, então nunca viola a restrição de exclusão `no_overlap` (reservas confirmadas na mesma sala não podem ter intervalos de datas sobrepostos — veja a nota sobre schema abaixo).
 
@@ -909,7 +946,7 @@ k6 run tests/performance/load/users/get_users.js -e K6_SCENARIO=soak -e K6_P95_M
 
 ### Caveat da ordem dos testes
 
-`delete_user.js` remove usuários permanentemente e `delete_room.js` aplica soft-delete em salas (ocultas do `GET /rooms`). Os testes por id (`get_user_by_id`, `get_room_by_id`, `put_user_by_id`, `put_room_by_id`) assumem que existem os primeiros `max(10, maxVUs)` ids — o pool é dimensionado pelo cenário ativo —; rodar um teste de delete/cancel antes deles gera 404s e violações de limiar nos runs seguintes. Se o DB de carga não for descartável, faça novo seed (ou rode um teste de create/list) antes dos testes por id.
+`delete_user.js` remove usuários permanentemente e `delete_room.js` aplica soft-delete em salas (ocultas do `GET /rooms`). Os testes de get por id (`get_user_by_id`, `get_room_by_id`) assumem que existem os primeiros `max(10, maxVUs)` ids — o pool é dimensionado pelo cenário ativo —; rodar um teste de delete/cancel antes deles gera 404s e violações de limiar nos runs seguintes. `put_user_by_id` / `put_room_by_id` **não** são afetados: eles semeiam linhas novas via `POST /seed/{kind}` e usam os ids retornados, então funcionam após qualquer run anterior. Se o DB de carga não for descartável, faça novo seed (ou rode um teste de create/list) antes dos testes de get por id.
 
 ### Testes de performance no CI
 

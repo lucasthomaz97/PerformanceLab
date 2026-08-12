@@ -1,5 +1,5 @@
 import { check } from 'k6';
-import { delJson, logFailure, sleepBetween } from '../../helpers/request_helpers.js';
+import { delJson, logFailure, pacedSleep } from '../../helpers/request_helpers.js';
 import { loadOptions } from '../../helpers/options_helpers.js';
 import { seedPool } from '../../helpers/seed_helpers.js';
 import { BASE_URL } from '../../helpers/config.js';
@@ -11,7 +11,7 @@ export function setup() {
 }
 
 export default function (data) {
-  const idx = ((__VU - 1) * data.sliceSize) + (__ITER % data.sliceSize);
+  const idx = data.sliceOffsets[__VU - 1] + (__ITER % data.sliceSizes[__VU - 1]);
   const id = data.ids[idx];
 
   const response = delJson(`${BASE_URL}/users/${id}`, { endpoint: `DELETE /users/${id}` });
@@ -21,5 +21,5 @@ export default function (data) {
     'status 204': (r) => r.status === 204,
   });
 
-  sleepBetween();
+  pacedSleep('users');
 }

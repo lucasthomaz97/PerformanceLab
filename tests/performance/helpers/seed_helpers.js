@@ -1,5 +1,10 @@
 import http from 'k6/http';
-import { computePoolConfig } from './pool_helpers.js';
+import {
+  computePerVuConfig,
+  computeSliceLayout,
+  guardSeedPoolSize,
+  pacingFactor,
+} from './pool_helpers.js';
 import { activeProfiles, resolveScenarioName } from './scenarios_helpers.js';
 import { getJson, postJson } from './request_helpers.js';
 import { BASE_URL, RUN_ID, isoDateFromOffset } from './config.js';
@@ -61,21 +66,30 @@ export function seedViaRoute(kind, quantity) {
   return response.json().ids;
 }
 
-export function sliceForVus(ids, maxVus) {
-  const sliceSize = Math.floor(ids.length / maxVus);
-  if (sliceSize === 0) {
+export function sliceForVus(ids, { poolSize, maxVus, sliceSizes }) {
+  if (poolSize < maxVus) {
     throw new Error(
-      `pool size ${ids.length} < maxVus ${maxVus}; raise K6_DELETE_POOL_SIZE`,
+      `pool size ${poolSize} < maxVus ${maxVus}; raise K6_DELETE_POOL_SIZE`,
     );
   }
-  console.info(`seeded ${ids.length} rows, slice per VU: ${sliceSize}`);
-  return { ids, sliceSize };
+  const { sliceSizes: sizes, sliceOffsets } = computeSliceLayout({
+    poolSize,
+    sliceSizes,
+  });
+  console.info(`seeded ${ids.length} rows, per-VU slices: ${sizes.join(',')}`);
+  return { ids, sliceSizes: sizes, sliceOffsets };
 }
 
 export function seedPool(kind) {
-  const { poolSize, maxVus } = computePoolConfig(activeProfiles(resolveScenarioName()));
-  const ids = seedViaRoute(kind, poolSize);
-  return sliceForVus(ids, maxVus);
+  const name = resolveScenarioName();
+  const config = computePerVuConfig(activeProfiles(name), pacingFactor(kind));
+  guardSeedPoolSize(config.poolSize, name, Boolean(__ENV.K6_DELETE_POOL_SIZE));
+  const ids = seedViaRoute(kind, config.poolSize);
+  return sliceForVus(ids, config);
+}
+
+export function seedById(kind, count) {
+  return seedViaRoute(kind, count);
 }
 
 function seedRow(kind, prefix, i) {

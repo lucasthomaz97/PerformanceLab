@@ -1,5 +1,6 @@
 import http from 'k6/http';
 import { check, sleep } from 'k6';
+import { pacingFactor } from './pool_helpers.js';
 import { randomIntBetween } from './general_helpers.js';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json' };
@@ -65,6 +66,11 @@ export function parseBody(response, expectedStatus, fallback) {
 
 export function sleepBetween(min = 500, max = 1500) {
   sleep(randomIntBetween(min, max) / 1000);
+}
+
+export function pacedSleep(kind) {
+  const factor = pacingFactor(kind);
+  sleepBetween(500 * factor, 1500 * factor);
 }
 
 export function nextIdFromVus(n) {

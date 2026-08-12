@@ -1,20 +1,20 @@
 import { check } from 'k6';
-import { putJson, nextIdFromVus, logFailure, parseBody, sleepBetween } from '../../helpers/request_helpers.js';
+import { putJson, nextIdFromVus, logFailure, parseBody, pacedSleep } from '../../helpers/request_helpers.js';
 import { loadOptions } from '../../helpers/options_helpers.js';
 import { byIdSeedCount } from '../../helpers/pool_helpers.js';
-import { ensureRows } from '../../helpers/seed_helpers.js';
+import { seedById } from '../../helpers/seed_helpers.js';
 import { BASE_URL, RUN_ID, SCENARIO } from '../../helpers/config.js';
 
 export const options = loadOptions();
 
 export function setup() {
   const count = byIdSeedCount(SCENARIO);
-  ensureRows('users', count, 'Seed User');
-  return { count };
+  const ids = seedById('users', count);
+  return { ids, count };
 }
 
 export default function (data) {
-  const id = nextIdFromVus(data.count);
+  const id = data.ids[nextIdFromVus(data.count) - 1];
   const name = `Load Test User ${__VU}-${__ITER}`;
   const email = `load_test_user-${RUN_ID}-${__VU}-${__ITER}@example.com`;
   const phone = '99999-9999';
@@ -40,5 +40,5 @@ export default function (data) {
     'has updated_at': (u) => u.updated_at !== undefined,
   });
 
-  sleepBetween();
+  pacedSleep('users');
 }

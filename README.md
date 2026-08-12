@@ -73,7 +73,7 @@ uv sync
 5. Run:
 
 ```
-uv run uvicorn api.main:app --reload
+uv run uvicorn api.main:app --reload --timeout-keep-alive 30
 ```
 
 Tables are created automatically on startup via `Base.metadata.create_all`.
@@ -207,7 +207,7 @@ uv sync
 5. Execute:
 
 ```
-uv run uvicorn api.main:app --reload
+uv run uvicorn api.main:app --reload --timeout-keep-alive 30
 ```
 
 As tabelas são criadas automaticamente na inicialização via `Base.metadata.create_all`.

@@ -74,7 +74,7 @@ jobs:
 
       - name: Boot the API and health-wait
         run: |
-          uv run uvicorn api.main:app --host 0.0.0.0 --port 8000 &
+          uv run uvicorn api.main:app --host 0.0.0.0 --port 8000 --timeout-keep-alive 30 &
           for i in $(seq 1 30); do
             if curl -fsS http://localhost:8000/docs > /dev/null 2>&1; then
               echo "API ready"
