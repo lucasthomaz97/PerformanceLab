@@ -126,7 +126,7 @@ See [tests/README.md](tests/README.md) for a full description of every test.
 
 ### CI/CD
 
-Every push and pull request to `main` runs:
+Every push and pull request to `master` runs:
 
 1. **Lint** — `ruff check .`
 2. **Type check** — `mypy api/`
@@ -260,7 +260,7 @@ Consulte [tests/README.md](tests/README.md) para a descrição completa de cada 
 
 ### CI/CD
 
-Cada push e pull request para `main` executa:
+Cada push e pull request para `master` executa:
 
 1. **Lint** — `ruff check .`
 2. **Type check** — `mypy api/`

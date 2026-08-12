@@ -443,6 +443,13 @@ k6 run tests/performance/load/users/get_users.js -e K6_SCENARIO=soak -e K6_P95_M
 
 `delete_user.js` permanently removes users, and `delete_room.js` soft-deletes rooms (hidden from `GET /rooms`). The by-id tests (`get_user_by_id`, `get_room_by_id`, `put_user_by_id`, `put_room_by_id`) assume the first `max(10, maxVUs)` ids exist — the pool scales with the active scenario — so running a delete/cancel test first will produce 404s and threshold breaches on later by-id runs. If the load-test DB is not disposable, reseed (or re-run a create/list test) before by-id runs.
 
+### Performance tests in CI
+
+A dedicated workflow (`.github/workflows/performance.yml`) guards the k6 scripts:
+
+- **`validate`** runs on every push/PR to `master`: it installs k6 and runs `k6 inspect` over all the scripts in `tests/performance/load/**/*.js`. No server or DB needed — it only fails if a script stops parsing.
+- **`smoke`** is manual/opt-in (`workflow_dispatch`): it boots the API against a Postgres service container, health-waits, then runs the `smoke` profile of `get_users.js`, `get_rooms.js`, `post_users.js`, `post_rooms.js` and `post_reservations.js`, failing on threshold breach. Optional `p95-ms` / `error-rate` inputs relax thresholds for slow runners.
+
 ### How to read the knee
 
 When concurrency exceeds the pool/threadpool capacity, requests queue inside the app before hitting the DB. Symptoms:
@@ -903,6 +910,13 @@ k6 run tests/performance/load/users/get_users.js -e K6_SCENARIO=soak -e K6_P95_M
 ### Caveat da ordem dos testes
 
 `delete_user.js` remove usuários permanentemente e `delete_room.js` aplica soft-delete em salas (ocultas do `GET /rooms`). Os testes por id (`get_user_by_id`, `get_room_by_id`, `put_user_by_id`, `put_room_by_id`) assumem que existem os primeiros `max(10, maxVUs)` ids — o pool é dimensionado pelo cenário ativo —; rodar um teste de delete/cancel antes deles gera 404s e violações de limiar nos runs seguintes. Se o DB de carga não for descartável, faça novo seed (ou rode um teste de create/list) antes dos testes por id.
+
+### Testes de performance no CI
+
+Um workflow dedicado (`.github/workflows/performance.yml`) protege os scripts k6:
+
+- **`validate`** roda em todo push/PR para `master`: instala o k6 e executa `k6 inspect` em todos os scripts de `tests/performance/load/**/*.js`. Nenhum servidor nem banco é necessário — falha apenas se um script deixar de parsear.
+- **`smoke`** é manual/opt-in (`workflow_dispatch`): inicializa a API com um container de serviço Postgres, aguarda a saúde e roda o perfil `smoke` de `get_users.js`, `get_rooms.js`, `post_users.js`, `post_rooms.js` e `post_reservations.js`, falhando em violação de limiar. Inputs opcionais `p95-ms` / `error-rate` afrouxam os limiares para runners lentos.
 
 ### Como ler o "knee"
 
