@@ -86,7 +86,10 @@ const scenarios = {
     executor: 'ramping-vus',
     startVUs: 0,
     stages: [
-      { duration: BREAKPOINT_DURATION, target: BREAKPOINT_MAX_VUS },
+      { duration: '2m', target: 50 },
+      { duration: '2m', target: 100 },
+      { duration: '2m', target: 150 },
+      { duration: '2m', target: 200 },
     ],
     gracefulRampDown: '30s',
   },
