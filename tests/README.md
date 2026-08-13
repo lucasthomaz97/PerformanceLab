@@ -18,7 +18,8 @@ tests/
 │   ├── conftest.py      # TestClient fixture + get_db override
 │   ├── test_users_api.py
 │   ├── test_rooms_api.py
-│   └── test_reservations_api.py
+│   ├── test_reservations_api.py
+│   └── test_main.py     # Real app boot smoke test (lifespan + /openapi.json)
 ├── performance/         # k6 load tests (not pytest) - see "Performance & Load Tests"
 │   ├── helpers/
 │   │   ├── config.js               # BASE_URL, RUN_ID, SCENARIO, DAY_MS, isoDateFromOffset
@@ -46,6 +47,10 @@ tests/
     │   ├── test_user_service.py
     │   ├── test_room_service.py
     │   └── test_reservation_service.py
+    ├── database/        # DB engine/dependency tests (get_db)
+    │   └── test_database.py
+    └── main/            # App assembly + lifespan tests
+        └── test_main.py
 ```
 
 ## How to run
@@ -115,6 +120,8 @@ Shared fixtures auto-discovered by pytest (available in all subdirectories):
 | **TestDeleteUser**   | `test_delete_user_success`                  | User is removed (get returns 404)              |
 |                      | `test_delete_user_not_found`                | Deleting nonexistent user returns 404          |
 |                      | `test_delete_user_with_active_reservations` | Deleting user with active reservations returns 409 |
+| **TestSeedUser**     | `test_seed_creates_requested_users`         | Bulk-seeds N users, returns distinct ids       |
+|                      | `test_seed_zero_quantity`                   | quantity=0 returns [], creates nothing         |
 
 ### `services/test_room_service.py`
 
@@ -136,6 +143,8 @@ Shared fixtures auto-discovered by pytest (available in all subdirectories):
 | **TestDeleteRoom**   | `test_delete_room_soft_delete`                     | Deactivation is a soft delete (`is_active=False`)   |
 |                      | `test_delete_room_not_found`                       | Deleting nonexistent room returns 404               |
 |                      | `test_delete_room_with_active_reservations`        | Deleting room with active reservations returns 409  |
+| **TestSeedRoom**     | `test_seed_creates_requested_rooms`                | Bulk-seeds N rooms, returns distinct ids            |
+|                      | `test_seed_zero_quantity`                          | quantity=0 returns [], creates nothing              |
 
 ### `services/test_reservation_service.py`
 
@@ -162,6 +171,10 @@ Shared fixtures auto-discovered by pytest (available in all subdirectories):
 | **TestListRoomReservations** | `test_list_room_reservations`                     | All reservations for a room returned                   |
 |                              | `test_list_room_reservations_empty`               | Room with no reservations returns empty list           |
 |                              | `test_list_room_reservations_room_inactive`       | Inactive room returns 404                              |
+| **TestSeedReservation**      | `test_seed_creates_requested_reservations`        | Seeds N reservations + 100-user/100-room pool, CONFIRMED |
+|                              | `test_seed_returns_ids_in_insert_order`           | Returned ids match DB insert order                     |
+|                              | `test_seed_zero_quantity`                         | quantity=0 returns [], creates nothing                 |
+|                              | `test_seed_beyond_pool_size_cycles_pool`          | q>100 cycles users/rooms across future days            |
 
 ## Integration Tests (`integration/`)
 
@@ -196,6 +209,12 @@ HTTP-layer tests using FastAPI TestClient. Each test verifies status codes, resp
 | **TestCancelReservation**     | `test_cancel_reservation`      | PATCH /reservations/{id}/cancel with 200 + status |
 | **TestListUserReservations**  | `test_list_user_reservations`  | GET /reservations/user/{id} returns all           |
 | **TestListRoomReservations**  | `test_list_room_reservations`  | GET /reservations/room/{id} returns all           |
+
+### `integration/test_main.py`
+
+| Class     | Test                       | What it verifies                                              |
+| --------- | -------------------------- | ------------------------------------------------------------- |
+| —         | `test_app_boots_and_serves` | Real `api.main` app boots via TestClient; `/openapi.json` returns 200 |
 
 ## Schema Tests (`schemas/`)
 
@@ -296,6 +315,31 @@ ORM model tests — validates defaults, constraints, cascades, and enum values. 
 | **TestRoomUniqueName**     | `test_duplicate_name_raises`                | DB-level IntegrityError on duplicate room name      |
 | **TestUserCascadeDelete**  | `test_delete_user_cascades_to_reservations` | Deleting user cascades to reservations              |
 | **TestRoomCascadeDelete**  | `test_delete_room_cascades_to_reservations` | Deleting room cascades to reservations              |
+
+## Database Tests (`database/`)
+
+DB engine/dependency tests — exercise the real `get_db` dependency (yield + close) without opening a database connection.
+
+### `database/test_database.py`
+
+| Class     | Test                                | What it verifies                                          |
+| --------- | ----------------------------------- | --------------------------------------------------------- |
+| —         | `test_get_db_yields_a_session`      | `get_db()` yields exactly one `Session` and closes it on exhaustion |
+| —         | `test_get_db_as_fastapi_dependency` | `get_db` works end-to-end as a FastAPI dependency         |
+
+## App Tests (`main/`)
+
+App assembly and `lifespan` tests for `api/main.py` — no real database required.
+
+### `main/test_main.py`
+
+| Class     | Test                                           | What it verifies                                        |
+| --------- | ---------------------------------------------- | ------------------------------------------------------- |
+| —         | `test_app_includes_base_routers`               | `/users`, `/rooms`, `/reservations` routers registered  |
+| —         | `test_seed_router_included_when_enabled`       | `/seed` router registered when `ENABLE_LOADTEST_ENDPOINTS=true` |
+| —         | `test_seed_router_excluded_when_disabled`      | `/seed` router absent when the flag is disabled         |
+| —         | `test_lifespan_creates_tables_on_non_postgres` | `create_all` runs on SQLite (non-postgres branch)       |
+| —         | `test_lifespan_runs_postgres_ddl`              | `CREATE EXTENSION` + gist `EXCLUDE` constraint emitted on a postgres-dialect engine |
 
 ## Performance & Load Tests (`performance/load/`)
 
@@ -515,7 +559,8 @@ tests/
 │   ├── conftest.py      # Rótulos/fixtures do TestClient + override do get_db
 │   ├── test_users_api.py
 │   ├── test_rooms_api.py
-│   └── test_reservations_api.py
+│   ├── test_reservations_api.py
+│   └── test_main.py     # Teste smoke de boot do app real (lifespan + /openapi.json)
 ├── performance/         # Testes de carga k6 (não pytest) - veja "Testes de Performance & Carga"
 │   ├── helpers/
 │   │   ├── config.js               # BASE_URL, RUN_ID, SCENARIO, DAY_MS, isoDateFromOffset
@@ -543,6 +588,10 @@ tests/
     │   ├── test_user_service.py
     │   ├── test_room_service.py
     │   └── test_reservation_service.py
+    ├── database/        # Testes do engine/dependência (get_db)
+    │   └── test_database.py
+    └── main/            # Testes de montagem do app + lifespan
+        └── test_main.py
 ```
 
 ### Como executar
@@ -612,6 +661,8 @@ Fixtures compartilhadas descobertas automaticamente pelo pytest (disponíveis em
 | **TestDeleteUser**    | `test_delete_user_success`                    | Usuário é removido (get retorna 404)            |
 |                       | `test_delete_user_not_found`                  | Excluir usuário inexistente retorna 404         |
 |                       | `test_delete_user_with_active_reservations`   | Excluir usuário com reservas ativas retorna 409 |
+| **TestSeedUser**      | `test_seed_creates_requested_users`           | Seed em massa de N usuários, retorna ids distintos |
+|                       | `test_seed_zero_quantity`                     | quantity=0 retorna [], não cria nada            |
 
 ### `services/test_room_service.py`
 
@@ -633,6 +684,8 @@ Fixtures compartilhadas descobertas automaticamente pelo pytest (disponíveis em
 | **TestDeleteRoom**    | `test_delete_room_soft_delete`                        | Desativação é um soft-delete (`is_active=False`)         |
 |                       | `test_delete_room_not_found`                          | Excluir sala inexistente retorna 404                     |
 |                       | `test_delete_room_with_active_reservations`           | Excluir sala com reservas ativas retorna 409             |
+| **TestSeedRoom**      | `test_seed_creates_requested_rooms`                   | Seed em massa de N salas, retorna ids distintos          |
+|                       | `test_seed_zero_quantity`                             | quantity=0 retorna [], não cria nada                     |
 
 ### `services/test_reservation_service.py`
 
@@ -659,6 +712,10 @@ Fixtures compartilhadas descobertas automaticamente pelo pytest (disponíveis em
 | **TestListRoomReservations**  | `test_list_room_reservations`                       | Todas as reservas de uma sala retornadas               |
 |                               | `test_list_room_reservations_empty`                 | Sala sem reservas retorna lista vazia                  |
 |                               | `test_list_room_reservations_room_inactive`         | Sala inativa retorna 404                               |
+| **TestSeedReservation**       | `test_seed_creates_requested_reservations`          | Seed de N reservas + pool de 100 usuários/salas, CONFIRMED |
+|                               | `test_seed_returns_ids_in_insert_order`             | Ids retornados coincidem com a ordem de inserção       |
+|                               | `test_seed_zero_quantity`                           | quantity=0 retorna [], não cria nada                   |
+|                               | `test_seed_beyond_pool_size_cycles_pool`            | q>100 cicla usuários/salas por dias futuros            |
 
 ## Testes de Integração (`integration/`)
 
@@ -693,6 +750,12 @@ Testes da camada HTTP usando o TestClient do FastAPI. Cada teste verifica códig
 | **TestCancelReservation**      | `test_cancel_reservation`        | PATCH /reservations/{id}/cancel com 200 + status |
 | **TestListUserReservations**   | `test_list_user_reservations`    | GET /reservations/user/{id} retorna todas  |
 | **TestListRoomReservations**   | `test_list_room_reservations`    | GET /reservations/room/{id} retorna todas  |
+
+### `integration/test_main.py`
+
+| Classe     | Teste                       | O que verifica                                              |
+| ---------- | --------------------------- | ----------------------------------------------------------- |
+| —          | `test_app_boots_and_serves` | App real `api.main` inicia via TestClient; `/openapi.json` retorna 200 |
 
 ## Testes de Schema (`schemas/`)
 

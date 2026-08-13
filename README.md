@@ -32,7 +32,8 @@ api/
 ├── schemas/
 │   ├── user.py             # Pydantic: UserCreate, UserUpdate, UserResponse
 │   ├── room.py             # Pydantic: RoomCreate, RoomUpdate, RoomResponse
-│   └── reservation.py      # Pydantic: ReservationCreate, ReservationResponse
+│   ├── reservation.py      # Pydantic: ReservationCreate, ReservationResponse
+│   └── seed.py             # Pydantic: Seed* request/response models
 ├── services/
 │   ├── user_service.py     # User business rules
 │   ├── room_service.py     # Room business rules
@@ -40,7 +41,8 @@ api/
 └── routers/
     ├── users.py            # /users endpoints
     ├── rooms.py            # /rooms endpoints
-    └── reservations.py     # /reservations endpoints
+    ├── reservations.py     # /reservations endpoints
+    └── seed.py             # /seed endpoints (load-test seeding)
 ```
 
 ### Requirements
@@ -130,8 +132,10 @@ Every push and pull request to `master` runs:
 
 1. **Lint** — `ruff check .`
 2. **Type check** — `mypy api/`
-3. **Test with coverage** — `pytest tests/ -v --cov=api --cov-report=term-missing` against a PostgreSQL 17 service container
+3. **Test with coverage** — `pytest tests/ -v --cov=api --cov-report=term-missing` (the suite runs against in-memory SQLite; a PostgreSQL 17 service container is provisioned in the job)
 4. **Coverage artifact** uploaded on every run
+
+A separate **Performance workflow** (`.github/workflows/performance.yml`) validates the k6 load scripts: it installs a pinned k6 version and runs `k6 inspect` on every script in `tests/performance/load/` on every push and pull request. A manual smoke run against a live API can be triggered via `workflow_dispatch`, with tunable `p95-ms` and `error-rate` thresholds.
 
 ### Interactive docs
 
@@ -166,7 +170,8 @@ api/
 ├── schemas/
 │   ├── user.py             # Pydantic: UserCreate, UserUpdate, UserResponse
 │   ├── room.py             # Pydantic: RoomCreate, RoomUpdate, RoomResponse
-│   └── reservation.py      # Pydantic: ReservationCreate, ReservationResponse
+│   ├── reservation.py      # Pydantic: ReservationCreate, ReservationResponse
+│   └── seed.py             # Pydantic: modelos Seed* de request/response
 ├── services/
 │   ├── user_service.py     # Regras de negócio de usuário
 │   ├── room_service.py     # Regras de negócio de sala
@@ -174,7 +179,8 @@ api/
 └── routers/
     ├── users.py            # Endpoints /users
     ├── rooms.py            # Endpoints /rooms
-    └── reservations.py     # Endpoints /reservations
+    ├── reservations.py     # Endpoints /reservations
+    └── seed.py             # Endpoints /seed (seeding de testes de carga)
 ```
 
 ### Requisitos
@@ -264,8 +270,10 @@ Cada push e pull request para `master` executa:
 
 1. **Lint** — `ruff check .`
 2. **Type check** — `mypy api/`
-3. **Testes com cobertura** — `pytest tests/ -v --cov=api --cov-report=term-missing` em container PostgreSQL 17
+3. **Testes com cobertura** — `pytest tests/ -v --cov=api --cov-report=term-missing` (a suíte roda sobre SQLite em memória; um container de serviço PostgreSQL 17 é provisionado no job)
 4. **Artefato de cobertura** enviado a cada execução
+
+Um **workflow de performance** separado (`.github/workflows/performance.yml`) valida os scripts de carga k6: instala uma versão k6 fixada e executa `k6 inspect` em cada script em `tests/performance/load/` a cada push e pull request. Uma execução smoke manual contra uma API ativa pode ser disparada via `workflow_dispatch`, com limites `p95-ms` e `error-rate` configuráveis.
 
 ### Documentação interativa
 
