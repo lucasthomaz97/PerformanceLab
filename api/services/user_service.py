@@ -61,6 +61,8 @@ class UserService:
 
     @staticmethod
     def seed(db: Session, quantity: int) -> list[int]:
+        if quantity <= 0:
+            return []
         run_id = time.time_ns()
         emails = [f"seed-{run_id}-{i}@example.com" for i in range(quantity)]
         db.execute(

@@ -92,6 +92,8 @@ class ReservationService:
 
     @staticmethod
     def seed(db: Session, quantity: int) -> list[int]:
+        if quantity <= 0:
+            return []
         run_id = time.time_ns()
         pool_size = 100
 

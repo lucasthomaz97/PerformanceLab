@@ -51,6 +51,8 @@ class RoomService:
 
     @staticmethod
     def seed(db: Session, quantity: int) -> list[int]:
+        if quantity <= 0:
+            return []
         run_id = time.time_ns()
         names = [f"Seed Room {run_id}-{i}" for i in range(quantity)]
         db.execute(

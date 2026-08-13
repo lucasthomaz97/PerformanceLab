@@ -1,6 +1,7 @@
 import pytest
 from fastapi import HTTPException
 
+from api.models.user import User
 from api.schemas.user import UserCreate, UserUpdate
 from api.services.user_service import UserService
 
@@ -117,3 +118,19 @@ class TestDeleteUser:
             UserService.delete(db_session, user_id)
         assert exc.value.status_code == 409
         assert exc.value.detail == "cannot delete user with active reservations"
+
+
+class TestSeedUser:
+    def test_seed_creates_requested_users(self, db_session):
+        ids = UserService.seed(db_session, 5)
+        assert len(ids) == 5
+        assert len(set(ids)) == 5
+        assert db_session.query(User).count() == 5
+        seed_emails = (
+            db_session.query(User.email).filter(User.email.like("seed-%")).count()
+        )
+        assert seed_emails == 5
+
+    def test_seed_zero_quantity(self, db_session):
+        assert UserService.seed(db_session, 0) == []
+        assert db_session.query(User).count() == 0

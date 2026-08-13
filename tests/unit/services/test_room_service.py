@@ -3,6 +3,7 @@ from decimal import Decimal
 import pytest
 from fastapi import HTTPException
 
+from api.models.room import Room
 from api.schemas.room import RoomCreate, RoomUpdate
 from api.services.room_service import RoomService
 
@@ -122,3 +123,23 @@ class TestDeleteRoom:
             RoomService.delete(db_session, room_id)
         assert exc.value.status_code == 409
         assert exc.value.detail == "cannot delete room with active reservations"
+
+
+class TestSeedRoom:
+    def test_seed_creates_requested_rooms(self, db_session):
+        ids = RoomService.seed(db_session, 5)
+        assert len(ids) == 5
+        assert len(set(ids)) == 5
+        assert db_session.query(Room).count() == 5
+        seed_names = (
+            db_session.query(Room.name).filter(Room.name.like("Seed Room %")).count()
+        )
+        assert seed_names == 5
+
+        rows = db_session.query(Room).filter(Room.id.in_(ids)).all()
+        assert all(r.capacity == 2 for r in rows)
+        assert all(r.price_per_night == Decimal("99.99") for r in rows)
+
+    def test_seed_zero_quantity(self, db_session):
+        assert RoomService.seed(db_session, 0) == []
+        assert db_session.query(Room).count() == 0
