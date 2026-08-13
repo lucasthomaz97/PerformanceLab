@@ -21,7 +21,9 @@ from api.services.user_service import UserService
 
 @pytest.fixture
 def engine():
-    return create_engine("sqlite:///:memory:", echo=False)
+    engine = create_engine("sqlite:///:memory:", echo=False)
+    yield engine
+    engine.dispose()
 
 
 @pytest.fixture

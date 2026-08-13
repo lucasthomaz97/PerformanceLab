@@ -22,11 +22,13 @@ FROZEN_DATE = "2026-07-01"
 
 @pytest.fixture
 def engine():
-    return create_engine(
+    engine = create_engine(
         "sqlite:///file::memory:?cache=shared&uri=true",
         echo=False,
         connect_args={"check_same_thread": False},
     )
+    yield engine
+    engine.dispose()
 
 
 @pytest.fixture
