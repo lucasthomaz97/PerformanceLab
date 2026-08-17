@@ -10,9 +10,9 @@ class TestCreateUser:
         assert body["name"] == "Alice"
         assert body["email"] == "alice@test.com"
         assert body["phone"] is None
-        assert "id" in body
-        assert "created_at" in body
-        assert "updated_at" in body
+        assert isinstance(body["id"], int) and body["id"] > 0
+        assert isinstance(body["created_at"], str)
+        assert isinstance(body["updated_at"], str)
 
 
 class TestGetUser:

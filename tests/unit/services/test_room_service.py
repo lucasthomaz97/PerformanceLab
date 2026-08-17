@@ -12,7 +12,7 @@ class TestCreateRoom:
     def test_create_room_success(self, db_session):
         data = RoomCreate(name="101", capacity=2, price_per_night=Decimal("150.00"))
         room = RoomService.create(db_session, data)
-        assert room.id is not None
+        assert isinstance(room.id, int) and room.id > 0
         assert room.name == "101"
         assert room.capacity == 2
         assert room.price_per_night == Decimal("150.00")

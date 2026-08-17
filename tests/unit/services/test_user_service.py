@@ -10,7 +10,7 @@ class TestCreateUser:
     def test_create_user_success(self, db_session):
         data = UserCreate(name="Alice", email="alice@test.com")
         user = UserService.create(db_session, data)
-        assert user.id is not None
+        assert isinstance(user.id, int) and user.id > 0
         assert user.name == "Alice"
         assert user.email == "alice@test.com"
         assert user.phone is None

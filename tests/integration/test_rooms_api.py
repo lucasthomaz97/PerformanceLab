@@ -18,9 +18,9 @@ class TestCreateRoom:
         assert body["price_per_night"] == "150.00"
         assert body["description"] is None
         assert body["is_active"] is True
-        assert "id" in body
-        assert "created_at" in body
-        assert "updated_at" in body
+        assert isinstance(body["id"], int) and body["id"] > 0
+        assert isinstance(body["created_at"], str)
+        assert isinstance(body["updated_at"], str)
 
 
 class TestGetRoom:

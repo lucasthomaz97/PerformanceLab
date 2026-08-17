@@ -21,9 +21,9 @@ class TestCreateReservation:
         assert body["check_in"] == "2026-08-01"
         assert body["check_out"] == "2026-08-05"
         assert body["status"] == "confirmed"
-        assert "id" in body
-        assert "created_at" in body
-        assert "updated_at" in body
+        assert isinstance(body["id"], int) and body["id"] > 0
+        assert isinstance(body["created_at"], str)
+        assert isinstance(body["updated_at"], str)
 
 
 class TestCancelReservation:
