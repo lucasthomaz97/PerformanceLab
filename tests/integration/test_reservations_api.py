@@ -76,7 +76,12 @@ class TestListUserReservations:
         assert response.status_code == status.HTTP_200_OK
         body = response.json()
         assert len(body) == 2
-        assert all(r["user_id"] == user.id for r in body)
+        for r in body:
+            assert r["user_id"] == user.id
+            assert isinstance(r["room_id"], int)
+            assert isinstance(r["check_in"], str)
+            assert isinstance(r["check_out"], str)
+            assert r["status"] in ("confirmed", "cancelled")
 
 
 class TestListRoomReservations:
@@ -107,4 +112,9 @@ class TestListRoomReservations:
         assert response.status_code == status.HTTP_200_OK
         body = response.json()
         assert len(body) == 2
-        assert all(r["room_id"] == room.id for r in body)
+        for r in body:
+            assert r["room_id"] == room.id
+            assert isinstance(r["user_id"], int)
+            assert isinstance(r["check_in"], str)
+            assert isinstance(r["check_out"], str)
+            assert r["status"] in ("confirmed", "cancelled")
