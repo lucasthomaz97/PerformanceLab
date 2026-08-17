@@ -94,3 +94,7 @@ class TestDeleteRoom:
     def test_delete_room(self, client, room):
         response = client.delete(f"/rooms/{room.id}")
         assert response.status_code == status.HTTP_204_NO_CONTENT
+
+        get_response = client.get(f"/rooms/{room.id}")
+        assert get_response.status_code == status.HTTP_200_OK
+        assert get_response.json()["is_active"] is False
