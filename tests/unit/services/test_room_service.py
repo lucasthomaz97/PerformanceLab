@@ -74,6 +74,7 @@ class TestListRooms:
         )
         result = RoomService.get_multi(db_session)
         assert len(result) == 2
+        assert {r.name for r in result} == {"101", "102"}
 
     def test_list_rooms_excludes_inactive(self, db_session, room):
         RoomService.delete(db_session, room.id)
@@ -135,6 +136,9 @@ class TestDeleteRoom:
             RoomService.delete(db_session, room_id)
         assert exc.value.status_code == 409
         assert exc.value.detail == "cannot delete room with active reservations"
+
+        still_exists = RoomService.get(db_session, room_id)
+        assert still_exists.id == room_id
 
 
 class TestSeedRoom:

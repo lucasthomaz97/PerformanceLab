@@ -53,7 +53,11 @@ class TestListRooms:
 
         response = client.get("/rooms/")
         assert response.status_code == status.HTTP_200_OK
-        assert len(response.json()) == 2
+        body = response.json()
+        assert len(body) == 2
+        names = {r["name"] for r in body}
+        assert "101" in names
+        assert "102" in names
 
     def test_list_rooms_paginated(self, client, db_session):
         from api.schemas.room import RoomCreate
@@ -76,6 +80,7 @@ class TestListRooms:
         assert response.status_code == status.HTTP_200_OK
         body = response.json()
         assert len(body) == 1
+        assert body[0]["name"] == "102"
 
 
 class TestUpdateRoom:

@@ -131,6 +131,9 @@ class TestDeleteUser:
         assert exc.value.status_code == 409
         assert exc.value.detail == "cannot delete user with active reservations"
 
+        still_exists = UserService.get(db_session, user_id)
+        assert still_exists.id == user_id
+
 
 class TestSeedUser:
     def test_seed_creates_requested_users(self, db_session):
