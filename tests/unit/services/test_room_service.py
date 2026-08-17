@@ -18,6 +18,8 @@ class TestCreateRoom:
         assert room.price_per_night == Decimal("150.00")
         assert room.description is None
         assert room.is_active is True
+        assert room.created_at is not None
+        assert room.updated_at is not None
 
     def test_create_room_with_description(self, db_session):
         data = RoomCreate(

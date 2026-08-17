@@ -14,6 +14,8 @@ class TestCreateUser:
         assert user.name == "Alice"
         assert user.email == "alice@test.com"
         assert user.phone is None
+        assert user.created_at is not None
+        assert user.updated_at is not None
 
     def test_create_user_with_phone(self, db_session):
         data = UserCreate(
@@ -22,9 +24,12 @@ class TestCreateUser:
             phone="+55 11 99999-9999",
         )
         user = UserService.create(db_session, data)
+        assert isinstance(user.id, int) and user.id > 0
         assert user.name == "Bob"
         assert user.email == "bob@test.com"
         assert user.phone == "+55 11 99999-9999"
+        assert user.created_at is not None
+        assert user.updated_at is not None
 
     def test_create_user_duplicate_email(self, db_session, user):
         data = UserCreate(name="Charlie", email=user.email)

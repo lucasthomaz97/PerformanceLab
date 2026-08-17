@@ -31,6 +31,8 @@ class TestCreateReservation:
         assert result.check_in == date(2026, 8, 1)
         assert result.check_out == date(2026, 8, 4)
         assert result.status == ReservationStatus.CONFIRMED
+        assert result.created_at is not None
+        assert result.updated_at is not None
 
     @freeze_time(FROZEN_DATE)
     def test_create_reservation_user_not_found(self, db_session, room):
