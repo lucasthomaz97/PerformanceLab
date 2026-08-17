@@ -45,6 +45,9 @@ class TestGetUser:
         assert result.id == user.id
         assert result.name == user.name
         assert result.email == user.email
+        assert result.phone == user.phone
+        assert result.created_at == user.created_at
+        assert result.updated_at == user.updated_at
 
     def test_get_user_not_found(self, db_session):
         with pytest.raises(HTTPException) as exc:
@@ -78,15 +81,19 @@ class TestListUsers:
 class TestUpdateUser:
     def test_update_user_name(self, db_session, user):
         data = UserUpdate(name="Alice Updated")
+        original_updated_at = user.updated_at
         result = UserService.update(db_session, user.id, data)
         assert result.name == "Alice Updated"
         assert result.email == user.email
+        assert result.updated_at >= original_updated_at
 
     def test_update_user_email(self, db_session, user):
         data = UserUpdate(email="alice_new@test.com")
+        original_updated_at = user.updated_at
         result = UserService.update(db_session, user.id, data)
         assert result.email == "alice_new@test.com"
         assert result.name == user.name
+        assert result.updated_at >= original_updated_at
 
     def test_update_user_not_found(self, db_session):
         data = UserUpdate(name="Ghost")

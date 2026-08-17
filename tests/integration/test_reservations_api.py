@@ -43,7 +43,9 @@ class TestCancelReservation:
 
         response = client.patch(f"/reservations/{res_id}/cancel")
         assert response.status_code == status.HTTP_200_OK
-        assert response.json()["status"] == "cancelled"
+        body = response.json()
+        assert body["id"] == res_id
+        assert body["status"] == "cancelled"
 
 
 class TestListUserReservations:

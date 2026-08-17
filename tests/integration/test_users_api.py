@@ -23,6 +23,9 @@ class TestGetUser:
         assert body["id"] == user.id
         assert body["name"] == user.name
         assert body["email"] == user.email
+        assert body["phone"] is None
+        assert isinstance(body["created_at"], str)
+        assert isinstance(body["updated_at"], str)
 
 
 class TestListUsers:
@@ -43,10 +46,14 @@ class TestListUsers:
 
 class TestUpdateUser:
     def test_update_user(self, client, user):
+        original_updated_at = user.updated_at.isoformat()
         payload = {"name": "Alice Updated"}
         response = client.put(f"/users/{user.id}", json=payload)
         assert response.status_code == status.HTTP_200_OK
-        assert response.json()["name"] == "Alice Updated"
+        body = response.json()
+        assert body["name"] == "Alice Updated"
+        assert body["email"] == user.email
+        assert body["updated_at"] >= original_updated_at
 
 
 class TestDeleteUser:

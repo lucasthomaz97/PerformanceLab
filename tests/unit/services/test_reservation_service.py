@@ -270,8 +270,10 @@ class TestCreateReservation:
 class TestCancelReservation:
     @freeze_time(FROZEN_DATE)
     def test_cancel_confirmed_reservation(self, db_session, reservation):
+        original_updated_at = reservation.updated_at
         result = ReservationService.cancel(db_session, reservation.id)
         assert result.status == ReservationStatus.CANCELLED
+        assert result.updated_at >= original_updated_at
 
     @freeze_time(FROZEN_DATE)
     def test_cancel_already_cancelled(self, db_session, reservation):

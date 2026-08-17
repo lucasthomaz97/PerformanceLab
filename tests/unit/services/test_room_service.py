@@ -44,6 +44,12 @@ class TestGetRoom:
         result = RoomService.get(db_session, room.id)
         assert result.id == room.id
         assert result.name == room.name
+        assert result.capacity == room.capacity
+        assert result.price_per_night == room.price_per_night
+        assert result.description == room.description
+        assert result.is_active == room.is_active
+        assert result.created_at == room.created_at
+        assert result.updated_at == room.updated_at
 
     def test_get_room_not_found(self, db_session):
         with pytest.raises(HTTPException) as exc:
@@ -84,13 +90,17 @@ class TestListRooms:
 class TestUpdateRoom:
     def test_update_room_capacity(self, db_session, room):
         data = RoomUpdate(capacity=10)
+        original_updated_at = room.updated_at
         result = RoomService.update(db_session, room.id, data)
         assert result.capacity == 10
+        assert result.updated_at >= original_updated_at
 
     def test_update_room_name(self, db_session, room):
         data = RoomUpdate(name="Presidential Suite")
+        original_updated_at = room.updated_at
         result = RoomService.update(db_session, room.id, data)
         assert result.name == "Presidential Suite"
+        assert result.updated_at >= original_updated_at
 
     def test_update_room_not_found(self, db_session):
         data = RoomUpdate(name="Ghost")

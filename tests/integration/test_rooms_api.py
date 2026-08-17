@@ -27,7 +27,14 @@ class TestGetRoom:
     def test_get_room(self, client, room):
         response = client.get(f"/rooms/{room.id}")
         assert response.status_code == status.HTTP_200_OK
-        assert response.json()["id"] == room.id
+        body = response.json()
+        assert body["id"] == room.id
+        assert body["name"] == room.name
+        assert body["capacity"] == room.capacity
+        assert body["price_per_night"] == str(room.price_per_night)
+        assert body["is_active"] is True
+        assert isinstance(body["created_at"], str)
+        assert isinstance(body["updated_at"], str)
 
 
 class TestListRooms:
@@ -73,10 +80,14 @@ class TestListRooms:
 
 class TestUpdateRoom:
     def test_update_room(self, client, room):
+        original_updated_at = room.updated_at.isoformat()
         payload = {"capacity": 10}
         response = client.put(f"/rooms/{room.id}", json=payload)
         assert response.status_code == status.HTTP_200_OK
-        assert response.json()["capacity"] == 10
+        body = response.json()
+        assert body["capacity"] == 10
+        assert body["name"] == room.name
+        assert body["updated_at"] >= original_updated_at
 
 
 class TestDeleteRoom:
