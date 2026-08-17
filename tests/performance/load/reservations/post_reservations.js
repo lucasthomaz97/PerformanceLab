@@ -62,6 +62,8 @@ export default function (data) {
     'has id': (r) => r.id !== undefined,
     'user_id matches': (r) => r.user_id === data.userId,
     'room_id matches': (r) => r.room_id === data.roomId,
+    'check_in matches': (r) => r.check_in === check_in,
+    'check_out matches': (r) => r.check_out === check_out,
     'status confirmed': (r) => r.status === 'confirmed',
     'created_at exists': (r) => r.created_at !== undefined,
   });

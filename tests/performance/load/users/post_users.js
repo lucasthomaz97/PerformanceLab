@@ -30,6 +30,7 @@ export default function () {
     'has id': (u) => u.id !== undefined,
     'name matches': (u) => u.name === name,
     'email matches': (u) => u.email === email,
+    'phone matches': (u) => u.phone === '99999-9999',
     'created_at exists': (u) => u.created_at !== undefined,
   });
 

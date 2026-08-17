@@ -39,6 +39,7 @@ export default function (data) {
     'id matches': (u) => u.id === id,
     'name matches': (u) => u.name === name,
     'email matches': (u) => u.email === email,
+    'phone matches': (u) => u.phone === phone,
     'has updated_at': (u) => u.updated_at !== undefined,
   });
 

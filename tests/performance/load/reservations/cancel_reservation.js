@@ -33,6 +33,7 @@ export default function (data) {
     'has id': (r) => r.id !== undefined,
     'id matches': (r) => r.id === id,
     'status cancelled': (r) => r.status === 'cancelled',
+    'has updated_at': (r) => r.updated_at !== undefined,
   });
 
   pacedSleep('reservations');

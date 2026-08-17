@@ -18,6 +18,7 @@ export default function (data) {
   const name = `Load Test Room ${RUN_ID}-${__VU}-${__ITER}`;
   const capacity = 4;
   const price_per_night = 199.99;
+  const description = 'Updated load test room';
 
   const response = putJson(
     `${BASE_URL}/rooms/${id}`,
@@ -25,7 +26,7 @@ export default function (data) {
       name,
       capacity,
       price_per_night,
-      description: 'Updated load test room',
+      description,
     },
     { endpoint: `PUT /rooms/${id}` },
   );
@@ -44,6 +45,8 @@ export default function (data) {
     'id matches': (r) => r.id === id,
     'name matches': (r) => r.name === name,
     'capacity matches': (r) => r.capacity === capacity,
+    'price_per_night matches': (r) => Number(r.price_per_night) === price_per_night,
+    'description matches': (r) => r.description === description,
     'has updated_at': (r) => r.updated_at !== undefined,
   });
 
