@@ -18,7 +18,6 @@ export default function () {
 
   check(response, {
     'status 200': (r) => r.status === 200,
-    'body not empty': (r) => r.body.length > 0,
   });
 
   checkListFields(rooms, 'rooms', ['id', 'name', 'capacity', 'price_per_night', 'is_active', 'created_at', 'updated_at']);

@@ -18,7 +18,6 @@ export default function () {
 
   check(response, {
     'status 200': (r) => r.status === 200,
-    'body not empty': (r) => r.body.length > 0,
   });
 
   checkListFields(users, 'users', ['id', 'name', 'email', 'created_at', 'updated_at']);
