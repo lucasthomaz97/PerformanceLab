@@ -24,32 +24,38 @@ class TestUserCreate:
         assert data.name == "Alice"
 
     def test_name_empty_raises(self):
-        with pytest.raises(ValidationError):
+        with pytest.raises(ValidationError) as exc:
             UserCreate(name="", email="alice@test.com")
+        assert exc.value.errors()[0]["loc"] == ("name",)
 
     def test_name_whitespace_only_raises(self):
-        with pytest.raises(ValidationError):
+        with pytest.raises(ValidationError) as exc:
             UserCreate(name="   ", email="alice@test.com")
+        assert exc.value.errors()[0]["loc"] == ("name",)
 
     def test_name_too_long_raises(self):
-        with pytest.raises(ValidationError):
+        with pytest.raises(ValidationError) as exc:
             UserCreate(name="A" * 101, email="alice@test.com")
+        assert exc.value.errors()[0]["loc"] == ("name",)
 
     def test_name_max_length_allowed(self):
         data = UserCreate(name="A" * 100, email="alice@test.com")
         assert len(data.name) == 100
 
     def test_phone_invalid_format_raises(self):
-        with pytest.raises(ValidationError):
+        with pytest.raises(ValidationError) as exc:
             UserCreate(name="Alice", email="alice@test.com", phone="abc")
+        assert exc.value.errors()[0]["loc"] == ("phone",)
 
     def test_phone_too_short_raises(self):
-        with pytest.raises(ValidationError):
+        with pytest.raises(ValidationError) as exc:
             UserCreate(name="Alice", email="alice@test.com", phone="123456")
+        assert exc.value.errors()[0]["loc"] == ("phone",)
 
     def test_phone_too_long_raises(self):
-        with pytest.raises(ValidationError):
+        with pytest.raises(ValidationError) as exc:
             UserCreate(name="Alice", email="alice@test.com", phone="1" * 21)
+        assert exc.value.errors()[0]["loc"] == ("phone",)
 
     def test_phone_none_allowed(self):
         data = UserCreate(name="Alice", email="alice@test.com", phone=None)
@@ -83,13 +89,16 @@ class TestUserUpdate:
         assert data.name == "Alice"
 
     def test_name_empty_raises(self):
-        with pytest.raises(ValidationError):
+        with pytest.raises(ValidationError) as exc:
             UserUpdate(name="")
+        assert exc.value.errors()[0]["loc"] == ("name",)
 
     def test_name_too_long_raises(self):
-        with pytest.raises(ValidationError):
+        with pytest.raises(ValidationError) as exc:
             UserUpdate(name="B" * 101)
+        assert exc.value.errors()[0]["loc"] == ("name",)
 
     def test_phone_too_short_raises(self):
-        with pytest.raises(ValidationError):
+        with pytest.raises(ValidationError) as exc:
             UserUpdate(phone="123456")
+        assert exc.value.errors()[0]["loc"] == ("phone",)

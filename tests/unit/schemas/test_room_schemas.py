@@ -28,45 +28,53 @@ class TestRoomCreate:
         assert data.name == "101"
 
     def test_name_empty_raises(self):
-        with pytest.raises(ValidationError):
+        with pytest.raises(ValidationError) as exc:
             RoomCreate(name="", capacity=2, price_per_night=Decimal("100"))
+        assert exc.value.errors()[0]["loc"] == ("name",)
 
     def test_name_whitespace_only_raises(self):
-        with pytest.raises(ValidationError):
+        with pytest.raises(ValidationError) as exc:
             RoomCreate(name="   ", capacity=2, price_per_night=Decimal("100"))
+        assert exc.value.errors()[0]["loc"] == ("name",)
 
     def test_name_too_long_raises(self):
-        with pytest.raises(ValidationError):
+        with pytest.raises(ValidationError) as exc:
             RoomCreate(name="R" * 51, capacity=2, price_per_night=Decimal("100"))
+        assert exc.value.errors()[0]["loc"] == ("name",)
 
     def test_name_max_length_allowed(self):
         data = RoomCreate(name="R" * 50, capacity=2, price_per_night=Decimal("100"))
         assert len(data.name) == 50
 
     def test_capacity_zero_raises(self):
-        with pytest.raises(ValidationError):
+        with pytest.raises(ValidationError) as exc:
             RoomCreate(name="101", capacity=0, price_per_night=Decimal("100"))
+        assert exc.value.errors()[0]["loc"] == ("capacity",)
 
     def test_capacity_negative_raises(self):
-        with pytest.raises(ValidationError):
+        with pytest.raises(ValidationError) as exc:
             RoomCreate(name="101", capacity=-1, price_per_night=Decimal("100"))
+        assert exc.value.errors()[0]["loc"] == ("capacity",)
 
     def test_price_zero_raises(self):
-        with pytest.raises(ValidationError):
+        with pytest.raises(ValidationError) as exc:
             RoomCreate(name="101", capacity=2, price_per_night=Decimal("0"))
+        assert exc.value.errors()[0]["loc"] == ("price_per_night",)
 
     def test_price_negative_raises(self):
-        with pytest.raises(ValidationError):
+        with pytest.raises(ValidationError) as exc:
             RoomCreate(name="101", capacity=2, price_per_night=Decimal("-1"))
+        assert exc.value.errors()[0]["loc"] == ("price_per_night",)
 
     def test_description_too_long_raises(self):
-        with pytest.raises(ValidationError):
+        with pytest.raises(ValidationError) as exc:
             RoomCreate(
                 name="101",
                 capacity=2,
                 price_per_night=Decimal("100"),
                 description="X" * 501,
             )
+        assert exc.value.errors()[0]["loc"] == ("description",)
 
     def test_description_max_length_allowed(self):
         data = RoomCreate(
@@ -105,29 +113,36 @@ class TestRoomUpdate:
         assert data.description == "Updated"
 
     def test_name_empty_raises(self):
-        with pytest.raises(ValidationError):
+        with pytest.raises(ValidationError) as exc:
             RoomUpdate(name="")
+        assert exc.value.errors()[0]["loc"] == ("name",)
 
     def test_name_too_long_raises(self):
-        with pytest.raises(ValidationError):
+        with pytest.raises(ValidationError) as exc:
             RoomUpdate(name="R" * 51)
+        assert exc.value.errors()[0]["loc"] == ("name",)
 
     def test_capacity_zero_raises(self):
-        with pytest.raises(ValidationError):
+        with pytest.raises(ValidationError) as exc:
             RoomUpdate(capacity=0)
+        assert exc.value.errors()[0]["loc"] == ("capacity",)
 
     def test_capacity_negative_raises(self):
-        with pytest.raises(ValidationError):
+        with pytest.raises(ValidationError) as exc:
             RoomUpdate(capacity=-1)
+        assert exc.value.errors()[0]["loc"] == ("capacity",)
 
     def test_price_zero_raises(self):
-        with pytest.raises(ValidationError):
+        with pytest.raises(ValidationError) as exc:
             RoomUpdate(price_per_night=Decimal("0"))
+        assert exc.value.errors()[0]["loc"] == ("price_per_night",)
 
     def test_price_negative_raises(self):
-        with pytest.raises(ValidationError):
+        with pytest.raises(ValidationError) as exc:
             RoomUpdate(price_per_night=Decimal("-1"))
+        assert exc.value.errors()[0]["loc"] == ("price_per_night",)
 
     def test_description_too_long_raises(self):
-        with pytest.raises(ValidationError):
+        with pytest.raises(ValidationError) as exc:
             RoomUpdate(description="X" * 501)
+        assert exc.value.errors()[0]["loc"] == ("description",)
