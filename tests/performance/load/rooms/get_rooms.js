@@ -20,6 +20,8 @@ export default function () {
     'status 200': (r) => r.status === 200,
   });
 
+  if (response.status !== 200) return;
+
   checkListFields(rooms, 'rooms', ['id', 'name', 'capacity', 'price_per_night', 'is_active', 'created_at', 'updated_at']);
 
   sleepBetween();

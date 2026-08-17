@@ -37,6 +37,8 @@ export default function (data) {
     'status 200': (r) => r.status === 200,
   });
 
+  if (response.status !== 200) return;
+
   check(room, {
     'has id': (r) => r.id !== undefined,
     'id matches': (r) => r.id === id,

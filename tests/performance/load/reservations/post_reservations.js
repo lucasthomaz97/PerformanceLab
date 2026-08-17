@@ -56,6 +56,8 @@ export default function (data) {
     'status 201': (r) => r.status === 201,
   });
 
+  if (response.status !== 201) return;
+
   check(reservation, {
     'has id': (r) => r.id !== undefined,
     'user_id matches': (r) => r.user_id === data.userId,

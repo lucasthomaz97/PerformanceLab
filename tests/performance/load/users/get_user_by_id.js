@@ -25,6 +25,8 @@ export default function (data) {
     'status 200': (r) => r.status === 200,
   });
 
+  if (response.status !== 200) return;
+
   check(user, {
     'has id': (u) => u.id !== undefined,
     'id matches': (u) => u.id === id,
